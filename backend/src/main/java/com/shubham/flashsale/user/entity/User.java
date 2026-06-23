@@ -2,12 +2,13 @@ package com.shubham.flashsale.user.entity;
 
 import com.shubham.flashsale.common.entity.BaseEntity;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
 @Setter
 @Entity
+@Builder
+@RequiredArgsConstructor
 @Table(
         name = "users",
         indexes = {
@@ -16,10 +17,14 @@ import lombok.Setter;
                 @Index(name = "idx_deleted_at", columnList = "deleted_at")
         }
 )
+@AllArgsConstructor
 public class User extends BaseEntity {
 
     @Column(nullable = false, unique = true)
     private String email;
+
+    @Column(nullable = false,name = "full_name")
+    private String fullName;
 
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;

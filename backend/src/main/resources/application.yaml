@@ -33,7 +33,11 @@ spring:
 
 ratelimit:
   algorithm: TOKEN_BUCKET
-#  max-requests: 4
-#  window-seconds: 60
+  max-requests: 5
+  window-seconds: 60
   burst-capacity: 5
   refill-rate: 1
+
+jwt:
+  secret: ${JWT_SECRET:dGhpcy1pcy1hLXNhbXBsZS1kZXZlbG9wbWVudC1zZWNyZXQta2V5LXdoY2gtaXMtbG9uZy1lbm91Z2g=}
+  expiration: 86400000
