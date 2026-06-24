@@ -5,7 +5,7 @@ import com.shubham.flashsale.auth.dto.AuthResponse;
 import com.shubham.flashsale.auth.dto.RefreshRequest;
 import com.shubham.flashsale.user.dto.LoginDto;
 import com.shubham.flashsale.user.dto.UserResponseDto;
-import com.shubham.flashsale.user.entity.RegistrartionDto;
+import com.shubham.flashsale.user.dto.RegistrartionDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;

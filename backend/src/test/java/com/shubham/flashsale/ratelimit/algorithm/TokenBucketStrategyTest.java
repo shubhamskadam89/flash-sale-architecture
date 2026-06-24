@@ -2,6 +2,8 @@ package com.shubham.flashsale.ratelimit.algorithm;
 
 import com.shubham.flashsale.ratelimit.RateLimitProperties;
 import com.shubham.flashsale.ratelimit.RateLimitResult;
+import com.shubham.flashsale.ratelimit.identity.IdentityType;
+import com.shubham.flashsale.ratelimit.identity.RateLimitIdentity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -55,7 +57,7 @@ class TokenBucketStrategyTest {
         );
 
         RateLimitResult result =
-                strategy.checkLimit("demo-user");
+                strategy.checkLimit(new RateLimitIdentity(IdentityType.USER, "demo-user"));
 
         assertTrue(result.allowed());
 
@@ -85,7 +87,7 @@ class TokenBucketStrategyTest {
         );
 
         RateLimitResult result =
-                strategy.checkLimit("demo-user");
+                strategy.checkLimit(new RateLimitIdentity(IdentityType.USER, "demo-user"));
 
         assertFalse(result.allowed());
 
@@ -113,7 +115,7 @@ class TokenBucketStrategyTest {
 
         assertThrows(
                 IllegalStateException.class,
-                () -> strategy.checkLimit("demo-user")
+                () -> strategy.checkLimit(new RateLimitIdentity(IdentityType.USER, "demo-user"))
         );
     }
 
@@ -132,7 +134,7 @@ class TokenBucketStrategyTest {
 
         assertThrows(
                 IllegalStateException.class,
-                () -> strategy.checkLimit("demo-user")
+                () -> strategy.checkLimit(new RateLimitIdentity(IdentityType.USER, "demo-user"))
         );
     }
 }

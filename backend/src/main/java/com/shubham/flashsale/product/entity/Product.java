@@ -2,10 +2,12 @@ package com.shubham.flashsale.product.entity;
 
 import com.shubham.flashsale.common.entity.BaseEntity;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -18,6 +20,9 @@ import java.math.BigDecimal;
                 @Index(name = "idx_deleted_at", columnList = "deleted_at")
         }
 )
+@AllArgsConstructor
+@Builder
+@NoArgsConstructor
 public class Product extends BaseEntity {
 
     @Column(nullable = false)
@@ -29,8 +34,9 @@ public class Product extends BaseEntity {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal basePrice;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "json")
-    private String metadata;
+    private Map<String, Object> metadata;
 
     @Column(nullable = false)
     private Boolean isActive = true;

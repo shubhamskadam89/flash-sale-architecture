@@ -2,9 +2,9 @@ package com.shubham.flashsale.auth.service;
 
 import com.shubham.flashsale.auth.entity.RefreshToken;
 import com.shubham.flashsale.auth.repository.RefreshTokenRepository;
-import com.shubham.flashsale.exception.RefreshTokenExpiredException;
-import com.shubham.flashsale.exception.RefreshTokenNotFoundException;
-import com.shubham.flashsale.exception.RefreshTokenRevokedException;
+import com.shubham.flashsale.exception.security.RefreshTokenExpiredException;
+import com.shubham.flashsale.exception.security.RefreshTokenNotFoundException;
+import com.shubham.flashsale.exception.security.RefreshTokenRevokedException;
 import com.shubham.flashsale.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

@@ -31,8 +31,10 @@ public class User extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private UserRole role = UserRole.USER;
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean isActive = true;
 }
