@@ -1,4 +1,7 @@
-package com.shubham.flashsale.user.entity;
+package com.shubham.flashsale.user.dto;
+
+import com.shubham.flashsale.user.entity.User;
+import com.shubham.flashsale.user.entity.UserRole;
 
 import java.io.Serializable;
 

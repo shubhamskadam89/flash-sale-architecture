@@ -1,5 +1,10 @@
 package com.shubham.flashsale.exception;
 
+import com.shubham.flashsale.exception.product.NoSuchProductException;
+import com.shubham.flashsale.exception.security.RefreshTokenExpiredException;
+import com.shubham.flashsale.exception.security.RefreshTokenNotFoundException;
+import com.shubham.flashsale.exception.security.RefreshTokenRevokedException;
+import com.shubham.flashsale.exception.user.UserAlreadyExistsException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -86,6 +91,27 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(response);
+    }
+    
+    @ExceptionHandler(NoSuchProductException.class)
+    public ResponseEntity<ApiErrorResponse> noSuchProduct(
+            NoSuchProductException ex,
+            HttpServletRequest request
+    ){
+        ApiErrorResponse response =
+                new ApiErrorResponse(
+                        Instant.now(),
+                        HttpStatus.BAD_REQUEST,
+                        ex.getMessage(),
+                        "NO_SUCH_PRODUCT",
+                        request.getRequestURI(),
+                        null
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+        
     }
 
 }

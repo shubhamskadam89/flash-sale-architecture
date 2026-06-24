@@ -8,10 +8,10 @@ import com.shubham.flashsale.auth.jwt.JwtProperties;
 import com.shubham.flashsale.auth.jwt.JwtService;
 import com.shubham.flashsale.auth.entity.RefreshToken;
 import com.shubham.flashsale.auth.repository.RefreshTokenRepository;
-import com.shubham.flashsale.exception.UserAlreadyExistsException;
+import com.shubham.flashsale.exception.user.UserAlreadyExistsException;
 import com.shubham.flashsale.user.dto.LoginDto;
 import com.shubham.flashsale.user.dto.UserResponseDto;
-import com.shubham.flashsale.user.entity.RegistrartionDto;
+import com.shubham.flashsale.user.dto.RegistrartionDto;
 import com.shubham.flashsale.user.entity.User;
 import com.shubham.flashsale.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,10 +22,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.chrono.ChronoLocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 

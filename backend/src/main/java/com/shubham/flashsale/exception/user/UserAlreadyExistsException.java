@@ -1,4 +1,4 @@
-package com.shubham.flashsale.exception;
+package com.shubham.flashsale.exception.user;
 
 
 public class UserAlreadyExistsException extends RuntimeException {

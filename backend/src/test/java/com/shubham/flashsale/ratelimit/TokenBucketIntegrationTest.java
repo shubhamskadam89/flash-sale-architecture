@@ -1,6 +1,8 @@
 package com.shubham.flashsale.ratelimit;
 
 import com.shubham.flashsale.ratelimit.algorithm.TokenBucketStrategy;
+import com.shubham.flashsale.ratelimit.identity.IdentityType;
+import com.shubham.flashsale.ratelimit.identity.RateLimitIdentity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,13 +31,13 @@ class TokenBucketIntegrationTest {
 
         for (int i = 0; i < 5; i++) {
             RateLimitResult result =
-                    strategy.checkLimit("test-user");
+                    strategy.checkLimit(new RateLimitIdentity(IdentityType.USER, "test-user"));
 
             assertTrue(result.allowed());
         }
 
         RateLimitResult blocked =
-                strategy.checkLimit("test-user");
+                strategy.checkLimit(new RateLimitIdentity(IdentityType.USER, "test-user"));
 
         assertFalse(blocked.allowed());
     }
