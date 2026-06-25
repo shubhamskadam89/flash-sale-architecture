@@ -1,5 +1,6 @@
 package com.shubham.flashsale;
 
+import com.shubham.flashsale.idempotency.IdempotencyStore;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 

@@ -1,23 +1,20 @@
 package com.shubham.flashsale.idempotency;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.RequiredArgsConstructor;
+import lombok.*;
 import org.springframework.http.HttpStatus;
 
 @Data
 @Builder
 @AllArgsConstructor
-@RequiredArgsConstructor
+@NoArgsConstructor
 public class IdempotencyRecord {
 
     private IdempotencyState state;
 
 
-    private String response;
+    private String responseBody;
 
-    private HttpStatus status;
+    private int status;
 
 
 }
