@@ -66,7 +66,7 @@ public class PurchaseServiceImpl implements PurchaseService {
         log.debug("Lua execution finished. Result status: {}", result.status());
         commonFlashSaleService.validatePurchaseResult(result);
 
-        log.info("Inventory reserved successfully in Redis. Persisting order to database for UserUUID: {}", user.getUuid());
+        log.info("Inventory reserved successfully in Redis. Queueing order for asynchronous persistence. userUuid={}", user.getUuid());
 
         OrderQueueMessage message = OrderQueueMessage.create(
                 user.getUuid(),
