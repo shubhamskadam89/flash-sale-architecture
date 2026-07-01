@@ -3,6 +3,8 @@ package com.shubham.flashsale.flashsale.order.service;
 import com.shubham.flashsale.common.CommonAuthService;
 import com.shubham.flashsale.exception.sale.SaleItemNotFoundException;
 import com.shubham.flashsale.flashsale.common.CommonFlashSaleService;
+import com.shubham.flashsale.flashsale.events.StockUpdateEvent;
+import com.shubham.flashsale.flashsale.events.StockUpdatePublisher;
 import com.shubham.flashsale.flashsale.order.dto.PurchaseRequest;
 import com.shubham.flashsale.flashsale.order.dto.PurchaseResponse;
 import com.shubham.flashsale.flashsale.order.entity.Order;
@@ -31,6 +33,7 @@ public class PurchaseServiceImpl implements PurchaseService {
     private final SaleItemRepository saleItemRepository;
     private final CommonFlashSaleService commonFlashSaleService;
     private final OrderQueueProducer orderQueueProducer;
+    private final StockUpdatePublisher stockUpdatePublisher;
 
     @Override
     @Transactional
@@ -65,6 +68,14 @@ public class PurchaseServiceImpl implements PurchaseService {
 
         log.debug("Lua execution finished. Result status: {}", result.status());
         commonFlashSaleService.validatePurchaseResult(result);
+
+        stockUpdatePublisher.publish(
+                StockUpdateEvent.builder()
+                        .saleUuid(saleUuid)
+                        .saleItemUuid(saleItem.getUuid())
+                        .remainingInventory(result.remainingInventory())
+                        .build()
+        );
 
         log.info("Inventory reserved successfully in Redis. Queueing order for asynchronous persistence. userUuid={}", user.getUuid());
 
