@@ -94,8 +94,7 @@ jacoco.exec
 # =========================
 # Postman Local Dirs
 # =========================
-.postman/
-postman/
+
 backend/flash-sale-engine/
 README copy.md
 project_plan.md

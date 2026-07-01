@@ -1,5 +1,7 @@
 package com.shubham.flashsale.common.redis;
 
+import java.util.UUID;
+
 public final class RedisKeyBuilder {
 
     private RedisKeyBuilder() {}
@@ -24,12 +26,12 @@ public final class RedisKeyBuilder {
     // Flash Sale
     // ===========================
 
-    public static String inventory(Long saleItemId) {
-        return "inventory:" + saleItemId;
+    public static String inventory(String saleItemUuid) {
+        return "inventory:" + saleItemUuid;
     }
 
-    public static String userPurchase(Long saleItemId, Long userId) {
-        return "user_purchases:" + saleItemId + ":" + userId;
+    public static String userPurchase(String saleItemUuid, String userUuid) {
+        return "user_purchases:" + saleItemUuid + ":" + userUuid;
     }
 
     // ===========================
@@ -52,7 +54,7 @@ public final class RedisKeyBuilder {
     // Pub/Sub
     // ===========================
 
-    public static String stockUpdates(Long saleItemId) {
-        return "stock:updates:" + saleItemId;
+    public static String stockUpdates(String saleItemUuid) {
+        return "stock:updates:" + saleItemUuid;
     }
 }

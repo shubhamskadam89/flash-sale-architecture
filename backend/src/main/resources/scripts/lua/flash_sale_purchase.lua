@@ -1,8 +1,8 @@
 -- ============================================================================
 -- Flash Sale Purchase Script
 --
--- KEYS[1] -> inventory:{saleItemId}
--- KEYS[2] -> user_purchases:{saleItemId}:{userId}
+-- KEYS[1] -> inventory:{saleItemUuid}
+-- KEYS[2] -> user_purchases:{saleItemUuid}:{userUuid}
 --
 -- ARGV[1] -> quantity
 -- ARGV[2] -> maxPerUser

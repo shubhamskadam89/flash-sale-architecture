@@ -7,6 +7,7 @@ import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -18,49 +19,41 @@ public class FlashSalePurchaseExecutor {
 
 
     public PurchaseResult execute(
-            Long saleItemId,
-            Long userId,
+            String saleItemUuid,
+            String userUuid,
             int quantity,
             int maxPerUser
-    ){
-        String inventoryKey = RedisKeyBuilder.inventory(saleItemId);
+    ) {
+        String inventoryKey = RedisKeyBuilder.inventory(saleItemUuid);
+        String userPurchaseKey = RedisKeyBuilder.userPurchase(saleItemUuid, userUuid);
 
-        String userPurchaseKey = RedisKeyBuilder.userPurchase(saleItemId,userId);
-
-        List<?>result  = redisTemplate.execute(
+        List<?> result = redisTemplate.execute(
                 flashSalePurchaseScript,
-                List.of(inventoryKey,userPurchaseKey),
+                List.of(inventoryKey, userPurchaseKey),
                 String.valueOf(quantity),
                 String.valueOf(maxPerUser)
         );
 
-        if(result==null || result.size()!=2 ){
+        if (result == null || result.size() != 2) {
             throw new IllegalStateException("Invalid lua script response");
         }
+
         long first = ((Number) result.get(0)).longValue();
         long second = ((Number) result.get(1)).longValue();
 
         if (first == -1) {
-            return new PurchaseResult(
-                    PurchaseStatus.SOLD_OUT,
-                    0,
-                    (int) second
-            );
+            return new PurchaseResult(PurchaseStatus.SOLD_OUT, 0, (int) second);
         }
 
         if (first == -2) {
-            return new PurchaseResult(
-                    PurchaseStatus.LIMIT_EXCEEDED,
-                    0,
-                    (int) second
-            );
+            return new PurchaseResult(PurchaseStatus.LIMIT_EXCEEDED, 0, (int) second);
         }
-        return new PurchaseResult(
-                PurchaseStatus.SUCCESS,
-                (int) first,
-                (int) second
-        );
 
+        if (first == -3) {
+            return new PurchaseResult(PurchaseStatus.INVENTORY_NOT_LOADED, 0, 0);
+        }
+
+        return new PurchaseResult(PurchaseStatus.SUCCESS, (int) first, (int) second);
     }
 
 
