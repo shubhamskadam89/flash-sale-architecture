@@ -1,0 +1,43 @@
+$kind: http-request
+name: 10 - Create Sale Event
+url: "{{baseUrl}}/api/v1/admin/sales"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Postman Flash Sale",
+      "startTime": "{{saleStartTime}}",
+      "endTime": "{{saleEndTime}}"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      var now = new Date();
+      var start = new Date(now.getTime()+1000);
+      var end   = new Date(now.getTime() + 62 * 60 * 1000);
+      function fmt(d) {
+          var p = n => String(n).padStart(2,'0');
+          return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+      }
+      pm.collectionVariables.set('saleStartTime', fmt(start));
+      pm.collectionVariables.set('saleEndTime', fmt(end));
+      console.log('Sale window:', fmt(start), '->', fmt(end));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Sale event created and UUID captured', function () {
+          pm.response.to.have.status(200);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('saleUuid');
+          pm.collectionVariables.set('saleUuid', j.saleUuid);
+          console.log('Sale UUID:', j.saleUuid);
+      });
+    language: text/javascript
+order: 1000

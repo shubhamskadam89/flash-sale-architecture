@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/products/{{productUuid}}"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Product retrieved successfully', function () {
+          pm.response.to.have.status(200);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('name');
+          pm.expect(j).to.have.property('basePrice');
+      });
+    language: text/javascript
+order: 2000

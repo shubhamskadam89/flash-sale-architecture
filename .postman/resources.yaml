@@ -1,0 +1,7 @@
+# Use this workspace to collaborate
+workspace:
+  id: 0153bfec-714e-474d-90d4-ce89514b3844
+
+localResources:
+  collections:
+    - ../flash-sale-engine-postman-collection.json

@@ -1,0 +1,12 @@
+$kind: http-request
+url: "{{baseUrl}}/test/public/limit"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Public rate limit check passes', function () {
+          pm.response.to.have.status(200);
+          console.log('Public rate limit result:', JSON.stringify(pm.response.json()));
+      });
+    language: text/javascript
+order: 2000

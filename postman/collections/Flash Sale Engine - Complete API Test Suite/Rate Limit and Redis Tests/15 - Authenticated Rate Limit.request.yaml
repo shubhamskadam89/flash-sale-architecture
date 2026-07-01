@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{baseUrl}}/test/limit"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Authenticated rate limit check passes', function () {
+          pm.response.to.have.status(200);
+          console.log('Rate limit result:', JSON.stringify(pm.response.json()));
+      });
+    language: text/javascript
+order: 1000
