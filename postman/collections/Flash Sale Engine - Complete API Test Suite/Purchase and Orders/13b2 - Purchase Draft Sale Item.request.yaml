@@ -1,0 +1,33 @@
+$kind: http-request
+name: 13b2 - Purchase Draft Sale Item
+url: "{{baseUrl}}/api/v1/sales/{{emptySaleUuid}}/items/{{draftSaleItemUuid}}/purchase"
+method: POST
+headers:
+  Content-Type: application/json
+  X-Idempotency-Key: "{{draftIdempotencyKey}}"
+body:
+  type: json
+  content: |-
+    {
+      "quantity": 1
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      const key = pm.variables.replaceIn('{{$guid}}');
+      pm.collectionVariables.set('draftIdempotencyKey', key);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Purchase Draft Sale Item: Expects 400 Bad Request / SaleNotActiveException', function () {
+          pm.expect(pm.response.code).to.be.oneOf([400, 403]);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('message');
+          console.log('Rejection message:', j.message);
+      });
+    language: text/javascript
+order: 1200

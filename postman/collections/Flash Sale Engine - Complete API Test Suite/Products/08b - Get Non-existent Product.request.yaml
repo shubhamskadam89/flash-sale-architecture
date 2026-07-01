@@ -1,0 +1,16 @@
+$kind: http-request
+name: 08b - Get Non-existent Product
+url: "{{baseUrl}}/api/v1/products/00000000-0000-0000-0000-000000000000"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Get Non-existent Product: Expects 444 or 404 Not Found', function () {
+          pm.expect(pm.response.code).to.be.oneOf([404, 444]);
+      });
+    language: text/javascript
+order: 2100

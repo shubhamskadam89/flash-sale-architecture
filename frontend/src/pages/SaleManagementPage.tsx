@@ -3,10 +3,12 @@ import { PlusIcon } from '@heroicons/react/24/outline';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Spinner } from '@/components/ui/Spinner';
 import { SaleTable } from '@/features/sales/SaleTable';
 import { CreateSaleForm } from '@/features/sales/CreateSaleForm';
 import { AddSaleItemForm } from '@/features/sales/AddSaleItemForm';
 import { getLocalSales, useSales } from '@/hooks/useSales';
+import { extractErrorMessage } from '@/api/client';
 import type { LocalSaleEntry, SaleResponse, SaleItemResponse } from '@/types';
 
 export default function SaleManagementPage() {
@@ -14,7 +16,7 @@ export default function SaleManagementPage() {
   const [addItemSale, setAddItemSale] = useState<LocalSaleEntry | null>(null);
   
   // Fetch sales list directly from new backend GET endpoint
-  const { data: backendSales = [], refetch } = useSales();
+  const { data: backendSales = [], refetch, isLoading, error } = useSales();
   const [sales, setSales] = useState<LocalSaleEntry[]>([]);
 
   // Synchronize backend sales with any local item registration info
@@ -51,10 +53,20 @@ export default function SaleManagementPage() {
         }
       />
 
-      <SaleTable
-        sales={sales}
-        onAddItem={(sale) => setAddItemSale(sale)}
-      />
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+          Failed to load sale events. {extractErrorMessage(error)}
+        </div>
+      ) : isLoading ? (
+        <div className="flex h-32 items-center justify-center">
+          <Spinner className="h-8 w-8" />
+        </div>
+      ) : (
+        <SaleTable
+          sales={sales}
+          onAddItem={(sale) => setAddItemSale(sale)}
+        />
+      )}
 
       {/* Create Sale Modal */}
       <Modal

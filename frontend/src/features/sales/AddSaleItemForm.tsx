@@ -1,6 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import toast from 'react-hot-toast';
 import { Input, Select } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useAddSaleItem } from '@/hooks/useSales';
@@ -49,12 +50,19 @@ export function AddSaleItemForm({ sale, onSuccess }: Props) {
   });
 
   const onSubmit = (raw: FormInput) => {
+    const selectedProduct = products.find((p) => p.uuid === raw.productUuid);
+    const parsedPrice = parseFloat(raw.salePrice);
+    if (selectedProduct && parsedPrice > selectedProduct.basePrice) {
+      toast.error(`Sale price cannot exceed the base price of ${selectedProduct.basePrice.toLocaleString('en-IN')}`);
+      return;
+    }
+
     addItem(
       {
         saleUuid: sale.saleUuid,
         data: {
           productUuid: raw.productUuid,
-          salePrice: parseFloat(raw.salePrice),
+          salePrice: parsedPrice,
           inventory: parseInt(raw.inventory, 10),
           maxPerUser: parseInt(raw.maxPerUser, 10),
         },

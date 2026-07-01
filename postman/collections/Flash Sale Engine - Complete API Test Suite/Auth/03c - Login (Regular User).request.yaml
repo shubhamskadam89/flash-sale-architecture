@@ -1,0 +1,25 @@
+$kind: http-request
+name: 03c - Login (Regular User)
+url: "{{baseUrl}}/api/v1/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "postman_user@flashsale.com",
+      "password": "password123"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Login regular user successful', function () {
+          pm.response.to.have.status(200);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('accessToken');
+          pm.collectionVariables.set('userAccessToken', j.accessToken);
+          console.log('User access token captured:', j.accessToken.substring(0, 20) + '...');
+      });
+    language: text/javascript
+order: 3050

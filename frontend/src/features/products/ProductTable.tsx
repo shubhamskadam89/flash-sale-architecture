@@ -8,13 +8,22 @@ import { useProducts } from '@/hooks/useProducts';
 import { useAuthStore } from '@/store/authStore';
 import { formatCurrency, truncateUuid } from '@/utils/formatters';
 import { ProductForm } from './ProductForm';
+import { extractErrorMessage } from '@/api/client';
 import type { ProductResponse } from '@/types';
 
 export function ProductTable() {
-  const { data: products = [], isLoading } = useProducts();
+  const { data: products = [], isLoading, error } = useProducts();
   const role = useAuthStore((s) => s.user?.role);
   const isAdmin = role === 'ADMIN';
   const [showCreate, setShowCreate] = useState(false);
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+        Failed to load catalog products. {extractErrorMessage(error)}
+      </div>
+    );
+  }
 
   return (
     <>

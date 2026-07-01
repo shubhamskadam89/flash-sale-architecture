@@ -26,8 +26,9 @@ export default function OrderPage() {
       />
 
       {isLoading && (
-        <div className="flex h-48 items-center justify-center">
-          <Spinner className="h-8 w-8" />
+        <div className="max-w-lg mx-auto text-center py-12 space-y-3">
+          <Spinner className="h-8 w-8 mx-auto" />
+          <p className="text-sm text-gray-500 font-medium">Order is being processed. Retrying...</p>
         </div>
       )}
 

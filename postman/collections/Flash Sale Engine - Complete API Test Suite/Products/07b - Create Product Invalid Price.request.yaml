@@ -1,0 +1,29 @@
+$kind: http-request
+name: 07b - Create Product Invalid Price
+url: "{{baseUrl}}/api/v1/products"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Postman Bad Product",
+      "description": "Negative Price Product",
+      "basePrice": -10.00
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Create Product Negative Price: Expects 400 Bad Request', function () {
+          pm.expect(pm.response.code).to.equal(400);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('message');
+          console.log('Rejection message:', j.message);
+      });
+    language: text/javascript
+order: 1100

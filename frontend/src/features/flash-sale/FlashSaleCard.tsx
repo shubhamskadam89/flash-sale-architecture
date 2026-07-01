@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ShoppingCartIcon, SignalIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect } from 'react';
+import { ShoppingCartIcon, XCircleIcon } from '@heroicons/react/24/outline';
 import { InventoryCounter } from './InventoryCounter';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -23,15 +23,41 @@ function generateUuidV4(): string {
 }
 
 export function FlashSaleCard({ saleUuid, item, basePrice }: Props) {
-  const { inventory, connectionState } = useStockSSE(item.saleItemUuid, item.inventory);
-  const { mutate: purchase, isPending } = usePurchase(saleUuid, item.saleItemUuid);
+  // Sync inventory safely: start with item.inventory, then follow SSE updates & purchase updates
+  const [localInventory, setLocalInventory] = useState<number | null>(() => {
+    return typeof item.inventory === 'number' ? item.inventory : null;
+  });
 
-  const [idempotencyKey] = useState(() => generateUuidV4());
-  const isSoldOut = inventory !== null && inventory === 0;
+  const { inventory: sseInventory, connectionState } = useStockSSE(item.saleItemUuid, item.inventory);
+  const { mutate: purchase, isPending } = usePurchase(saleUuid, item.saleItemUuid);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => generateUuidV4());
+
+  useEffect(() => {
+    if (typeof sseInventory === 'number') {
+      setLocalInventory(sseInventory);
+    }
+  }, [sseInventory]);
+
+  const isSoldOut = typeof localInventory === 'number' && localInventory <= 0;
   const discount = discountPercent(basePrice, item.salePrice);
 
   const handlePurchase = () => {
-    purchase({ data: { quantity: 1 }, idempotencyKey });
+    purchase(
+      { data: { quantity: 1 }, idempotencyKey },
+      {
+        onSuccess: (res) => {
+          if (res && typeof res.remainingInventory === 'number') {
+            setLocalInventory(res.remainingInventory);
+          }
+          // Regenerate key to prevent unintended reuse on subsequent actions
+          setIdempotencyKey(generateUuidV4());
+        },
+        onError: () => {
+          // Regenerate key on failure so the user can try again safely
+          setIdempotencyKey(generateUuidV4());
+        }
+      }
+    );
   };
 
   return (
@@ -47,9 +73,9 @@ export function FlashSaleCard({ saleUuid, item, basePrice }: Props) {
       <div className="p-6 space-y-5">
         {/* Product name */}
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">{item.productName}</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{item.productName || 'Flash Sale Item'}</h2>
           <p className="mt-0.5 text-sm text-gray-500 font-mono truncate" title={item.saleItemUuid}>
-            Item ID: {item.saleItemUuid}
+            Item ID: {item.saleItemUuid || '—'}
           </p>
         </div>
 
@@ -74,11 +100,13 @@ export function FlashSaleCard({ saleUuid, item, basePrice }: Props) {
         <div className="rounded-lg bg-gray-50 border border-gray-100 px-4 py-3 space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-500">Remaining inventory</span>
-            <InventoryCounter remainingInventory={inventory} className="text-base" />
+            <InventoryCounter remainingInventory={localInventory} className="text-base" />
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-500">Limit per customer</span>
-            <span className="font-medium text-gray-700">{item.maxPerUser} unit{item.maxPerUser > 1 ? 's' : ''}</span>
+            <span className="font-medium text-gray-700">
+              {typeof item.maxPerUser === 'number' ? item.maxPerUser : '—'} unit{item.maxPerUser > 1 ? 's' : ''}
+            </span>
           </div>
         </div>
 

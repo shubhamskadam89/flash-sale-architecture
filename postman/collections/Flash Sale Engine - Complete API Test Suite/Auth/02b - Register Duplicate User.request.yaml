@@ -1,0 +1,26 @@
+$kind: http-request
+name: 02b - Register Duplicate User
+url: "{{baseUrl}}/api/v1/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "postman_user@flashsale.com",
+      "password": "password123",
+      "role": "USER",
+      "fullName": "Postman Regular User"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Register Duplicate: Expects 400 Bad Request or 409 Conflict', function () {
+          pm.expect(pm.response.code).to.be.oneOf([400, 409]);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('message');
+          console.log('Duplicate User rejection message:', j.message);
+      });
+    language: text/javascript
+order: 2100

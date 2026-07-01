@@ -1,4 +1,5 @@
 $kind: collection
+name: Flash Sale Engine - Complete API Test Suite
 description: |-
   Comprehensive Postman Collection covering all REST endpoints of the Flash Sale Engine.
 
@@ -22,3 +23,13 @@ variables:
   saleStartTime: ""
   saleEndTime: ""
   idempotencyKey: ""
+  userAccessToken: ""
+  badSaleStartTime: ""
+  badSaleEndTime: ""
+  emptySaleStartTime: ""
+  emptySaleEndTime: ""
+  emptySaleUuid: ""
+  draftSaleItemUuid: ""
+  draftIdempotencyKey: ""
+  exceedIdempotencyKey: ""
+  invalidQtyIdempotencyKey: ""

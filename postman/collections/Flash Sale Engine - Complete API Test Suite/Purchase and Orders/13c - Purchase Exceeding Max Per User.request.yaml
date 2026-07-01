@@ -1,0 +1,33 @@
+$kind: http-request
+name: 13c - Purchase Exceeding Max Per User
+url: "{{baseUrl}}/api/v1/sales/{{saleUuid}}/items/{{saleItemUuid}}/purchase"
+method: POST
+headers:
+  Content-Type: application/json
+  X-Idempotency-Key: "{{exceedIdempotencyKey}}"
+body:
+  type: json
+  content: |-
+    {
+      "quantity": 5
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      const key = pm.variables.replaceIn('{{$guid}}');
+      pm.collectionVariables.set('exceedIdempotencyKey', key);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Purchase Exceeds Limit: Expects 429 Too Many Requests or 400 Bad Request', function () {
+          pm.expect(pm.response.code).to.be.oneOf([400, 429]);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('message');
+          console.log('Rejection message:', j.message);
+      });
+    language: text/javascript
+order: 1300

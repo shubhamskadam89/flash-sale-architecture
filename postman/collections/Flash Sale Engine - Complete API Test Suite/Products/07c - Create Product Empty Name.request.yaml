@@ -1,0 +1,29 @@
+$kind: http-request
+name: 07c - Create Product Empty Name
+url: "{{baseUrl}}/api/v1/products"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "",
+      "description": "Empty Name Product",
+      "basePrice": 99.99
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Create Product Empty Name: Expects 400 Bad Request', function () {
+          pm.expect(pm.response.code).to.equal(400);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('message');
+          console.log('Rejection message:', j.message);
+      });
+    language: text/javascript
+order: 1200

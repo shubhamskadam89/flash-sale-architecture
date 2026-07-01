@@ -1,0 +1,41 @@
+$kind: http-request
+name: 10b - Create Sale End Before Start
+url: "{{baseUrl}}/api/v1/admin/sales"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Invalid Sale Window",
+      "startTime": "{{badSaleStartTime}}",
+      "endTime": "{{badSaleEndTime}}"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      var now = new Date();
+      var start = new Date(now.getTime() + 60 * 60 * 1000); // 1 hr in future
+      var end   = new Date(now.getTime() + 30 * 60 * 1000); // 30 min in future (before start)
+      function fmt(d) {
+          var p = n => String(n).padStart(2,'0');
+          return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+      }
+      pm.collectionVariables.set('badSaleStartTime', fmt(start));
+      pm.collectionVariables.set('badSaleEndTime', fmt(end));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('Create Sale End Before Start: Expects 400 Bad Request', function () {
+          pm.expect(pm.response.code).to.equal(400);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('message');
+          console.log('Rejection message:', j.message);
+      });
+    language: text/javascript
+order: 1100

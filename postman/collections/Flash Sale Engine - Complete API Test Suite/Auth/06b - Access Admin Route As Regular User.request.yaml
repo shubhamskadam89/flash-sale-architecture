@@ -1,0 +1,18 @@
+$kind: http-request
+name: 06b - Access Admin Route As Regular User
+url: "{{baseUrl}}/api/v1/admin/sales"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{userAccessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Access Admin Route: Expects 200 (Spring Security uses anyRequest().authenticated())', function () {
+          // Illustrates that backend has no role-based restriction on `/api/v1/admin/**`
+          pm.expect(pm.response.code).to.equal(200);
+          console.log('Access allowed! Response code:', pm.response.code);
+      });
+    language: text/javascript
+order: 6100

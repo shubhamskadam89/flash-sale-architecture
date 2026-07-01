@@ -88,15 +88,18 @@ apiClient.interceptors.response.use(
 export default apiClient;
 
 /** Extract a user-friendly message from an API error */
-export function extractErrorMessage(error: unknown): string {
+export function extractErrorMessage(error: any): string {
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data as ApiError | undefined;
-    if (data?.message) return data.message;
-    if (data?.errorCode) return data.errorCode.replace(/_/g, ' ');
+    const data = error.response?.data;
+    if (data) {
+      if (typeof data.message === 'string' && data.message) return data.message;
+      if (typeof data.msg === 'string' && data.msg) return data.msg;
+      if (typeof data.errorCode === 'string' && data.errorCode) return data.errorCode.replace(/_/g, ' ');
+    }
     if (error.response?.status === 429) return 'Too many requests. Please wait.';
     if (error.response?.status === 403) return 'You are not authorized for this action.';
     if (error.response?.status === 404) return 'Resource not found.';
     if (error.message) return error.message;
   }
-  return 'An unexpected error occurred.';
+  return 'Something went wrong';
 }

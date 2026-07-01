@@ -1,0 +1,31 @@
+$kind: http-request
+name: 13d - Purchase Reused Idempotency Key
+url: "{{baseUrl}}/api/v1/sales/{{saleUuid}}/items/{{saleItemUuid}}/purchase"
+method: POST
+headers:
+  Content-Type: application/json
+  X-Idempotency-Key: "{{idempotencyKey}}"
+body:
+  type: json
+  content: |-
+    {
+      "quantity": 1
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Purchase Reused Idempotency Key: Expects 200 (idempotent result) or 409/400 duplicated', function () {
+          // Idempotency keys should be handled cleanly
+          pm.expect(pm.response.code).to.be.oneOf([200, 400, 409]);
+          console.log('Idempotent response status:', pm.response.code);
+          try {
+              var j = pm.response.json();
+              console.log('Response body:', JSON.stringify(j));
+          } catch(e) {}
+      });
+    language: text/javascript
+order: 1400

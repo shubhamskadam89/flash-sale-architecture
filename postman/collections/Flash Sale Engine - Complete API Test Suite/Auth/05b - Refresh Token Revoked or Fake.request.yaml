@@ -1,0 +1,23 @@
+$kind: http-request
+name: 05b - Refresh Token Revoked or Fake
+url: "{{baseUrl}}/api/v1/auth/refresh"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "refreshToken": "00000000-0000-0000-0000-000000000000"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Refresh Token Fake: Expects 401/404 or 400 Bad Request', function () {
+          pm.expect(pm.response.code).to.be.oneOf([400, 401, 404]);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('message');
+          console.log('Fake Refresh Token rejection message:', j.message);
+      });
+    language: text/javascript
+order: 5100

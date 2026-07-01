@@ -19,38 +19,48 @@ export function createStockSSE(saleItemUuid: string, options: SSEOptions): () =>
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   function connect() {
-    if (destroyed) return;
-
-    // SSE needs auth — use the access token as a query param since
-    // EventSource does not support custom headers natively.
-    const token = localStorage.getItem('flash-sale-auth')
-      ? JSON.parse(localStorage.getItem('flash-sale-auth')!).state?.accessToken
-      : null;
+    if (destroyed || !saleItemUuid) return;
 
     const url = `/api/v1/stock-updates/${saleItemUuid}`;
-
     es = new EventSource(url);
 
+    // Support connected, ping, and standard open mappings
     es.onopen = () => {
       backoffMs = 1000; // reset on successful connect
       options.onConnected?.();
     };
 
-    es.addEventListener('stock-update', (e: MessageEvent) => {
+    es.addEventListener('connected', () => {
+      backoffMs = 1000;
+      options.onConnected?.();
+    });
+
+    es.addEventListener('ping', () => {
+      backoffMs = 1000;
+      options.onConnected?.();
+    });
+
+    es.addEventListener('stock-update', (event: MessageEvent) => {
       try {
-        const data: StockUpdateEvent = JSON.parse(e.data);
-        options.onUpdate(data);
+        const data = JSON.parse(event.data);
+        if (typeof data.remainingInventory === 'number') {
+          options.onUpdate({
+            saleUuid: data.saleUuid || '',
+            saleItemUuid: data.saleItemUuid || saleItemUuid,
+            remainingInventory: data.remainingInventory,
+            timestamp: data.timestamp || new Date().toISOString()
+          });
+        }
       } catch {
-        // malformed event — ignore
+        console.error('Invalid SSE stock-update payload', event.data);
       }
     });
 
-    // heartbeat event — keep-alive, no action needed
-    es.addEventListener('heartbeat', () => {/* no-op */});
-
     es.onerror = () => {
-      es?.close();
-      es = null;
+      if (es) {
+        es.close();
+        es = null;
+      }
       options.onDisconnected?.();
 
       if (!destroyed) {
@@ -67,7 +77,9 @@ export function createStockSSE(saleItemUuid: string, options: SSEOptions): () =>
   return () => {
     destroyed = true;
     if (reconnectTimer !== null) clearTimeout(reconnectTimer);
-    es?.close();
-    es = null;
+    if (es) {
+      es.close();
+      es = null;
+    }
   };
 }
