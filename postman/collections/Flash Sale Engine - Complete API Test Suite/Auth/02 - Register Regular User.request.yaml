@@ -1,0 +1,22 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "postman_user@flashsale.com",
+      "password": "password123",
+      "role": "USER",
+      "fullName": "Postman Regular User"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Register user: 200 OK or 400 already exists', function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 400]);
+      });
+    language: text/javascript
+order: 2000

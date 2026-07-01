@@ -1,0 +1,17 @@
+$kind: http-request
+name: 04 - Get Logged-in User (/me)
+url: "{{baseUrl}}/api/v1/auth/me"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('User info returned successfully', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.text()).to.include('postman_admin@flashsale.com');
+      });
+    language: text/javascript
+order: 4000

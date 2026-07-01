@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/test/pipeline"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Redis pipeline executes successfully', function () {
+          pm.response.to.have.status(200);
+          pm.expect(pm.response.text()).to.be.a('string');
+          console.log('Pipeline result:', pm.response.text());
+      });
+    language: text/javascript
+order: 3000

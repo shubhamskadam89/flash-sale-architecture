@@ -1,64 +1,77 @@
 package com.shubham.flashsale.flashsale.order.service;
 
-import com.shubham.flashsale.common.CommonService;
-import com.shubham.flashsale.exception.purchase.PurchaseNotAllowedException;
+import com.shubham.flashsale.common.CommonAuthService;
 import com.shubham.flashsale.exception.sale.SaleItemNotFoundException;
-import com.shubham.flashsale.exception.sale.SaleNotActiveException;
+import com.shubham.flashsale.flashsale.common.CommonFlashSaleService;
 import com.shubham.flashsale.flashsale.order.dto.PurchaseRequest;
 import com.shubham.flashsale.flashsale.order.dto.PurchaseResponse;
+import com.shubham.flashsale.flashsale.order.entity.Order;
 import com.shubham.flashsale.flashsale.order.repository.OrderRepository;
 import com.shubham.flashsale.flashsale.order.service.lua.FlashSalePurchaseExecutor;
 import com.shubham.flashsale.flashsale.order.service.lua.PurchaseResult;
 import com.shubham.flashsale.flashsale.sale.entity.SaleEvent;
-import com.shubham.flashsale.flashsale.sale.entity.Status;
-import com.shubham.flashsale.flashsale.sale.repository.SaleEventRepository;
+import com.shubham.flashsale.flashsale.sale.entity.SaleItem;
+import com.shubham.flashsale.flashsale.sale.repository.SaleItemRepository;
 import com.shubham.flashsale.user.entity.User;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
-import java.time.ZoneOffset;
-
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PurchaseServiceImpl implements PurchaseService {
 
-    private final SaleEventRepository saleRepository;
-
     private final OrderRepository orderRepository;
-
     private final FlashSalePurchaseExecutor purchaseExecutor;
-    private final CommonService commonService;
-
-//    private final ModelMapper mapper;
+    private final CommonAuthService commonAuthService;
+    private final SaleItemRepository saleItemRepository;
+    private final CommonFlashSaleService commonFlashSaleService;
 
     @Override
-    public PurchaseResponse purchase(String saleUuid, String saleItemUuid, PurchaseRequest request)
-    {
+    @Transactional
+    public PurchaseResponse purchase(
+            String saleUuid,
+            String saleItemUuid,
+            String idempotencyKey,
+            PurchaseRequest request
+    ) {
+        log.info("Initiating flash sale purchase. SaleUUID: {}, ItemUUID: {}, IdempotencyKey: {}, RequestedQty: {}",
+                saleUuid, saleItemUuid, idempotencyKey, request.getQuantity());
 
-        SaleEvent event = saleRepository.findByUuid(saleItemUuid)
-                .orElseThrow(()-> new SaleItemNotFoundException(saleItemUuid));
+        SaleItem saleItem = saleItemRepository.findByUuid(saleItemUuid)
+                .orElseThrow(() -> {
+                    log.warn("Purchase failed: Sale item not found. ItemUUID: {}", saleItemUuid);
+                    return new SaleItemNotFoundException(saleItemUuid);
+                });
 
-        if (event.getStatus() != Status.ACTIVE) {
-            throw new SaleNotActiveException();
-        }
+        log.debug("Validating item membership and event status for ItemUUID: {}", saleItemUuid);
+        SaleEvent saleEvent = commonFlashSaleService.validateSaleItemBelongsToSale(saleItem, saleUuid);
+        commonFlashSaleService.validateSaleEvent(saleEvent);
 
-        Instant now = Instant.now();
+        User user = commonAuthService.getCurrentUser();
+        log.debug("Executing Lua script token bucket/inventory check for UserUUID: {}, ItemUUID: {}", user.getUuid(), saleItem.getUuid());
 
-        if (now.isBefore(event.getStartTime().toInstant(ZoneOffset.UTC))) {
-            throw new PurchaseNotAllowedException();
-        }
-
-        if (now.isAfter(event.getEndTime().toInstant(ZoneOffset.UTC))) {
-            throw new PurchaseNotAllowedException();
-        }
-
-        // TODO: Issue #11 - Reimplement purchase flow using SaleItem.
-        throw new UnsupportedOperationException(
-                "Purchase flow will be implemented in Issue #11"
+        PurchaseResult result = purchaseExecutor.execute(
+                saleItem.getUuid(),
+                user.getUuid(),
+                request.getQuantity(),
+                saleItem.getMaxPerUser()
         );
+
+        log.debug("Lua execution finished. Result status: {}", result.status());
+        commonFlashSaleService.validatePurchaseResult(result);
+
+        log.info("Inventory reserved successfully in Redis. Persisting order to database for UserUUID: {}", user.getUuid());
+        Order savedOrder = commonFlashSaleService.persistOrder(
+                user,
+                saleItem,
+                request.getQuantity(),
+                idempotencyKey
+        );
+
+        log.info("Purchase flow completed successfully. OrderID: {}, OrderUUID: {}", savedOrder.getId(), savedOrder.getUuid());
+        return commonFlashSaleService.buildPurchaseResponse(savedOrder, saleItem, result);
     }
-
-
 }

@@ -1,0 +1,18 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/admin/sales/{{saleUuid}}/activate"
+method: POST
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Sale activated successfully', function () {
+          pm.response.to.have.status(200);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('saleUuid');
+          console.log('Sale activated:', j.saleUuid);
+      });
+    language: text/javascript
+order: 3000

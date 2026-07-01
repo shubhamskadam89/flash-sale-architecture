@@ -1,8 +1,13 @@
 package com.shubham.flashsale.flashsale.sale.service;
 
-import com.shubham.flashsale.common.CommonService;
+import com.shubham.flashsale.common.CommonAuthService;
+import com.shubham.flashsale.common.redis.RedisKeyBuilder;
 import com.shubham.flashsale.exception.product.NoSuchProductException;
-import com.shubham.flashsale.exception.sale.*;
+import com.shubham.flashsale.exception.sale.DuplicateSaleItemException;
+import com.shubham.flashsale.exception.sale.InvalidSaleException;
+import com.shubham.flashsale.exception.sale.SaleAlreadyActiveException;
+import com.shubham.flashsale.exception.sale.SaleEventNotFoundException;
+import com.shubham.flashsale.flashsale.common.CommonFlashSaleService;
 import com.shubham.flashsale.flashsale.sale.dto.AddSaleItemRequest;
 import com.shubham.flashsale.flashsale.sale.dto.CreateSaleRequest;
 import com.shubham.flashsale.flashsale.sale.dto.SaleItemResponse;
@@ -19,14 +24,10 @@ import com.shubham.flashsale.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -38,7 +39,9 @@ public class SaleServiceImpl implements SaleService {
     private final ProductRepository productRepository;
     private final SaleItemRepository saleItemRepository;
     private final UserRepository userRepository;
-    private final CommonService commonService;
+    private final CommonAuthService commonAuthService;
+    private final CommonFlashSaleService commonFlashSaleService;
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     @Transactional
@@ -46,9 +49,9 @@ public class SaleServiceImpl implements SaleService {
 
         log.debug("Validating sale request name={} startTime={} endTime={}",
                 request.getName(), request.getStartTime(), request.getEndTime());
-        validateSaleRequest(request);
+        commonFlashSaleService.validateSaleRequest(request);
 
-        User currentUser = commonService.getCurrentUser();
+        User currentUser = commonAuthService.getCurrentUser();
 
         log.info("Creating sale campaign name={} by user={}",
                 request.getName(), currentUser.getEmail());
@@ -63,7 +66,7 @@ public class SaleServiceImpl implements SaleService {
 
         SaleEvent savedSale = saleEventRepository.save(saleEvent);
 
-        log.info("Sale campaign created id={} uuid={}", savedSale.getId(), savedSale.getUuid());
+        log.info("Sale campaign created uuid={}", savedSale.getUuid());
 
         return SaleResponse.builder()
                 .saleUuid(UUID.fromString(savedSale.getUuid()))
@@ -101,11 +104,11 @@ public class SaleServiceImpl implements SaleService {
                 });
 
         log.debug("Validating sale item request productId={} salePrice={} inventory={}",
-                product.getId(), request.getSalePrice(), request.getInventory());
-        validateSaleItemRequest(request, product);
+                product.getUuid(), request.getSalePrice(), request.getInventory());
+        commonFlashSaleService.validateSaleItemRequest(request, product);
 
         if (saleItemRepository.existsBySaleEventAndProduct(saleEvent, product)) {
-            log.warn("Duplicate product={} for sale={}", product.getId(), saleUuid);
+            log.warn("Duplicate product={} for sale={}", product.getUuid(), saleUuid);
             throw new DuplicateSaleItemException(saleUuid, product.getUuid());
         }
 
@@ -120,8 +123,8 @@ public class SaleServiceImpl implements SaleService {
 
         SaleItem savedItem = saleItemRepository.save(saleItem);
 
-        log.info("Product={} added to sale={} saleItemId={} uuid={}",
-                product.getId(), saleUuid, savedItem.getId(), savedItem.getUuid());
+        log.info("Product={} added to sale={}  uuid={}",
+                product.getUuid(), saleUuid, savedItem.getUuid());
 
         return SaleItemResponse.builder()
 
@@ -139,54 +142,71 @@ public class SaleServiceImpl implements SaleService {
 
 
     @Override
+    @Transactional
     public SaleResponse activateSale(String saleUuid) {
-        log.warn("activateSale called but not yet implemented saleId={}", saleUuid);
-        throw new UnsupportedOperationException("Will be implemented in Issue #11");
-    }
+        log.info("Activating sale saleUuid={}", saleUuid);
 
+        SaleEvent saleEvent = saleEventRepository.findByUuid(saleUuid)
+                .orElseThrow(() -> new SaleEventNotFoundException(saleUuid));
+
+        if (saleEvent.getStatus() != Status.DRAFT) {
+            throw new InvalidSaleException("Sale is not in draft state");
+        }
+
+        List<SaleItem> saleItems = saleEvent.getSaleItems();
+
+        if (saleItems == null || saleItems.isEmpty()) {
+            throw new InvalidSaleException("Sale must contain at least one item");
+        }
+
+        saleItems.forEach(saleItem -> {
+            String inventoryKey = RedisKeyBuilder.inventory(saleItem.getUuid());
+
+            redisTemplate.opsForValue().set(
+                    inventoryKey,
+                    String.valueOf(saleItem.getInventory())
+            );
+
+            log.info(
+                    "Loaded sale item inventory into Redis. saleUuid={}, saleItemUuid={}, inventoryKey={}, inventory={}",
+                    saleEvent.getUuid(),
+                    saleItem.getUuid(),
+                    inventoryKey,
+                    saleItem.getInventory()
+            );
+        });
+
+
+
+        saleEvent.setStatus(Status.ACTIVE);
+        SaleEvent savedSale = saleEventRepository.save(saleEvent);
+
+        return SaleResponse.builder()
+                .saleUuid(UUID.fromString(savedSale.getUuid()))
+                .name(savedSale.getName())
+                .startTime(savedSale.getStartTime())
+                .endTime(savedSale.getEndTime())
+                .status(savedSale.getStatus())
+                .build();
+    }
 
 
     @Override
     public SaleResponse getSale(String saleUuid) {
         log.debug("getSale called saleId={}", saleUuid);
-        return null;
+        SaleEvent saleEvent = saleEventRepository.findByUuid(saleUuid)
+                .orElseThrow(()-> new SaleEventNotFoundException(saleUuid));
+
+        return SaleResponse.builder()
+                .saleUuid(UUID.fromString(saleEvent.getUuid()))
+                .name(saleEvent.getName())
+                .startTime(saleEvent.getStartTime())
+                .endTime(saleEvent.getEndTime())
+                .status(saleEvent.getStatus())
+                .build();
     }
 
 
 
-    private void validateSaleRequest(CreateSaleRequest request) {
-        if (request.getEndTime().isBefore(request.getStartTime())) {
-            log.debug("Validation failed: end time before start time start={} end={}",
-                    request.getStartTime(), request.getEndTime());
-            throw new InvalidSaleException("End time must be after start time");
-        }
 
-        if (request.getStartTime().isBefore(LocalDateTime.now())) {
-            log.debug("Validation failed: start time in the past startTime={}", request.getStartTime());
-            throw new InvalidSaleException("Sale cannot start in the past");
-        }
-    }
-
-    private void validateSaleItemRequest(AddSaleItemRequest request, Product product) {
-        if (request.getSalePrice().compareTo(BigDecimal.ZERO) <= 0) {
-            log.debug("Validation failed: non-positive sale price={}", request.getSalePrice());
-            throw new InvalidSaleItemException("Sale price must be positive");
-        }
-
-        if (request.getSalePrice().compareTo(product.getBasePrice()) > 0) {
-            log.debug("Validation failed: sale price={} exceeds base price={}",
-                    request.getSalePrice(), product.getBasePrice());
-            throw new InvalidSaleItemException("Sale price cannot exceed base price");
-        }
-
-        if (request.getInventory() <= 0) {
-            log.debug("Validation failed: non-positive inventory={}", request.getInventory());
-            throw new InvalidSaleItemException("Inventory must be greater than zero");
-        }
-
-        if (request.getMaxPerUser() <= 0) {
-            log.debug("Validation failed: non-positive maxPerUser={}", request.getMaxPerUser());
-            throw new InvalidSaleItemException("Max per user must be greater than zero");
-        }
-    }
 }

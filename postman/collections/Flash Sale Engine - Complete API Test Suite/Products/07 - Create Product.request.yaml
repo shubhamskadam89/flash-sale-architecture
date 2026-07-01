@@ -1,0 +1,35 @@
+$kind: http-request
+url: "{{baseUrl}}/api/v1/products"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Postman Mechanical Keyboard",
+      "description": "Premium Hot-swappable RGB Mechanical Keyboard",
+      "basePrice": 5999.00,
+      "metadata": {
+        "brand": "Keychron",
+        "switch": "Brown",
+        "layout": "ANSI 75%",
+        "backlighting": "RGB"
+      }
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{accessToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Product created and UUID captured', function () {
+          pm.response.to.have.status(200);
+          var j = pm.response.json();
+          pm.expect(j).to.have.property('uuid');
+          pm.collectionVariables.set('productUuid', j.uuid);
+          console.log('Product UUID:', j.uuid);
+      });
+    language: text/javascript
+order: 1000
