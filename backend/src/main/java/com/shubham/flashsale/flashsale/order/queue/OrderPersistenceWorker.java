@@ -47,6 +47,8 @@ public class OrderPersistenceWorker {
         log.info("Order persistence worker started. queueKey={}", RedisKeyBuilder.orderQueue());
 
         while (running) {
+            String payload = null;
+
             try {
                 List<byte[]> result = redisConnectionFactory
                         .getConnection()
@@ -59,13 +61,25 @@ public class OrderPersistenceWorker {
                     continue;
                 }
 
-                String payload = new String(result.get(1), StandardCharsets.UTF_8);
+                payload = new String(result.get(1), StandardCharsets.UTF_8);
                 OrderQueueMessage message = deserialize(payload);
 
                 orderPersistenceService.persist(message);
 
             } catch (Exception e) {
                 log.error("Order persistence worker failed while consuming queue", e);
+
+                if (payload != null) {
+                    redisConnectionFactory.getConnection().lPush(
+                            RedisKeyBuilder.orderRetryQueue().getBytes(StandardCharsets.UTF_8),
+                            payload.getBytes(StandardCharsets.UTF_8)
+                    );
+
+                    log.warn(
+                            "Order message moved to retry queue. retryQueueKey={}",
+                            RedisKeyBuilder.orderRetryQueue()
+                    );
+                }
             }
         }
 
