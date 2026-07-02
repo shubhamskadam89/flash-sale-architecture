@@ -3,6 +3,7 @@ package com.shubham.flashsale.flashsale.sale.controller;
 
 import com.shubham.flashsale.flashsale.sale.dto.AddSaleItemRequest;
 import com.shubham.flashsale.flashsale.sale.dto.CreateSaleRequest;
+import com.shubham.flashsale.flashsale.sale.dto.SaleDetailResponse;
 import com.shubham.flashsale.flashsale.sale.dto.SaleItemResponse;
 import com.shubham.flashsale.flashsale.sale.dto.SaleResponse;
 import com.shubham.flashsale.flashsale.sale.service.SaleService;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
+import java.util.List;
 
 
 @RestController
@@ -21,6 +23,25 @@ import java.util.UUID;
 public class SaleAdminController {
 
     private final SaleService saleService;
+
+    @GetMapping
+    public ResponseEntity<List<SaleDetailResponse>> getSales() {
+        return ResponseEntity.ok(saleService.getAdminSales());
+    }
+
+    @GetMapping("/{saleUuid}")
+    public ResponseEntity<SaleDetailResponse> getSale(
+            @PathVariable UUID saleUuid
+    ) {
+        return ResponseEntity.ok(saleService.getSaleDetail(saleUuid.toString()));
+    }
+
+    @GetMapping("/{saleUuid}/items")
+    public ResponseEntity<List<SaleItemResponse>> getSaleItems(
+            @PathVariable UUID saleUuid
+    ) {
+        return ResponseEntity.ok(saleService.getSaleItems(saleUuid.toString()));
+    }
 
     @PostMapping
     public ResponseEntity<SaleResponse> createSale(

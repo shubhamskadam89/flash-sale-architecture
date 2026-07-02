@@ -3,6 +3,7 @@ package com.shubham.flashsale.flashsale.sale.repository;
 
 import com.shubham.flashsale.flashsale.sale.entity.SaleEvent;
 import com.shubham.flashsale.flashsale.sale.entity.Status;
+import com.shubham.flashsale.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
@@ -23,5 +24,9 @@ public interface SaleEventRepository extends JpaRepository<SaleEvent,Long> {
             LocalDateTime now
     );
     Optional<SaleEvent> findByUuid(String uuid);
+
+    List<SaleEvent> findByCreatedByOrderByCreatedAtDesc(User createdBy);
+
+    List<SaleEvent> findAllByOrderByCreatedAtDesc();
 
 }

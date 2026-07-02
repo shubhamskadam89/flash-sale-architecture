@@ -1,6 +1,7 @@
 package com.shubham.flashsale.exception;
 
 import com.shubham.flashsale.exception.product.NoSuchProductException;
+import com.shubham.flashsale.exception.inventory.InventoryStateUnavailableException;
 import com.shubham.flashsale.exception.purchase.*;
 import com.shubham.flashsale.exception.sale.*;
 import com.shubham.flashsale.exception.security.*;
@@ -117,6 +118,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> purchaseNotAllowed(
             PurchaseNotAllowedException ex, HttpServletRequest request) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage(), "PURCHASE_NOT_ALLOWED", request);
+    }
+
+    // ── Inventory ───────────────────────────────────────────────────────────
+
+    @ExceptionHandler(InventoryStateUnavailableException.class)
+    public ResponseEntity<ApiErrorResponse> inventoryStateUnavailable(
+            InventoryStateUnavailableException ex, HttpServletRequest request) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), "INVENTORY_STATE_UNAVAILABLE", request);
     }
 
     // ── Fallback ─────────────────────────────────────────────────────────────

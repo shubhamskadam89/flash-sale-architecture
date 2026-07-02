@@ -8,6 +8,7 @@ import com.shubham.flashsale.auth.jwt.JwtProperties;
 import com.shubham.flashsale.auth.jwt.JwtService;
 import com.shubham.flashsale.auth.entity.RefreshToken;
 import com.shubham.flashsale.auth.repository.RefreshTokenRepository;
+import com.shubham.flashsale.common.CommonAuthService;
 import com.shubham.flashsale.exception.user.UserAlreadyExistsException;
 import com.shubham.flashsale.user.dto.LoginDto;
 import com.shubham.flashsale.user.dto.UserResponseDto;
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,7 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final RefreshTokenRepository refreshTokenRepository;
     private final RefreshTokenService refreshTokenService;
+    private final CommonAuthService commonAuthService;
 
 
     public UserResponseDto registerUser(RegistrartionDto registrartionDto) {
@@ -59,6 +62,7 @@ public class AuthService {
 
         return new UserResponseDto(UUID.fromString(user.getUuid()),
                 user.getEmail(),
+                user.getFullName(),
                 user.getRole(),
                 user.getIsActive()
         );
@@ -98,7 +102,8 @@ public class AuthService {
                 accessToken,
                 refreshToken.getToken(),
                 "Bearer",
-                jwtProperties.getExpiration()/1000
+                jwtProperties.getExpiration()/1000,
+                user.getRole().name()
         );
     }
     private String generateRefreshToken() {
@@ -129,7 +134,8 @@ public class AuthService {
                 accessToken,
                 newToken.getToken(),
                 "Bearer",
-                jwtProperties.getExpiration()/1000
+                jwtProperties.getExpiration()/1000,
+                user.getRole().name()
         );
     }
 
@@ -144,6 +150,18 @@ public class AuthService {
         refreshTokenService.revokeRefreshToken(
                 refreshToken
         );
+    }
+
+    public UserResponseDto getMe(){
+        User user  = commonAuthService.getCurrentUser();
+        UserResponseDto dto = new UserResponseDto(
+                UUID.fromString(user.getUuid()),
+                user.getEmail(),
+                user.getFullName(),
+                user.getRole(),
+                user.getIsActive()
+        );
+        return dto;
     }
 
 

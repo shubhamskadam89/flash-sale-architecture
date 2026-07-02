@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/orders")
@@ -17,6 +18,11 @@ import java.util.UUID;
 public class OrderController {
 
     private final OrderService orderService;
+
+    @GetMapping
+    public ResponseEntity<List<OrderResponse>> getMyOrders() {
+        return ResponseEntity.ok(orderService.getCurrentUserOrders());
+    }
 
     @GetMapping("/{orderUuid}")
     public ResponseEntity<OrderResponse> getOrder(
