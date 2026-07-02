@@ -1,0 +1,49 @@
+$kind: http-request
+name: 'EC-09 - Purchase After Sale Expired'
+url: '{{baseUrl}}/api/v1/sales/{{ecExpiredSaleUuid}}/items/{{ecExpiredSaleItemUuid}}/purchase'
+method: POST
+headers:
+  Content-Type: application/json
+auth:
+  type: bearer
+  credentials:
+    token: '{{accessToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "quantity": 1
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Wait 15 seconds to ensure the 11-second sale window has fully expired
+      const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const start = Date.now();
+      return delay(15000).then(() => {
+          console.log('EC-09: Waited ' + (Date.now() - start) + 'ms. Sale should now be expired. Attempting purchase...');
+          const key = 'ec-expired-' + pm.variables.replaceIn('{{$guid}}');
+          pm.request.headers.upsert({ key: 'X-Idempotency-Key', value: key });
+      });
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('EC-09: Purchase on expired sale should return 403 PURCHASE_NOT_ALLOWED', function () {
+          pm.expect(pm.response.code).to.equal(403,
+              'Expected 403 Forbidden for expired sale, got: ' + pm.response.code +
+              '. If 200, the time-window check in validateSaleEvent() is not working correctly.');
+      });
+
+      pm.test('EC-09: Error code is PURCHASE_NOT_ALLOWED', function () {
+          if (pm.response.code === 403) {
+              const j = pm.response.json();
+              pm.expect(j).to.have.property('errorCode');
+              pm.expect(j.errorCode).to.equal('PURCHASE_NOT_ALLOWED');
+          }
+      });
+
+      pm.test('EC-09: No orderUuid returned for expired sale purchase', function () {
+          pm.expect(pm.response.text()).to.not.include('orderUuid');
+      });
+    language: text/javascript
+order: 5000

@@ -1,0 +1,30 @@
+$kind: http-request
+name: 'EC-03 - Register Duplicate Email'
+url: '{{baseUrl}}/api/v1/auth/register'
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "postman_admin@flashsale.com",
+      "password": "password123",
+      "role": "ADMIN",
+      "fullName": "Duplicate Admin"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('EC-03: Duplicate registration should return 409 CONFLICT', function () {
+          pm.expect(pm.response.code).to.equal(409,
+              'Expected 409 Conflict for duplicate email, got: ' + pm.response.code);
+      });
+
+      pm.test('EC-03: Error code is USER_ALREADY_EXISTS', function () {
+          const j = pm.response.json();
+          pm.expect(j).to.have.property('errorCode');
+          pm.expect(j.errorCode).to.equal('USER_ALREADY_EXISTS');
+      });
+    language: text/javascript
+order: 3000

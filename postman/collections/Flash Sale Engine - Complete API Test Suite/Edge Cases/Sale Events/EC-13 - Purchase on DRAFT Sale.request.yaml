@@ -1,0 +1,42 @@
+$kind: http-request
+name: 'EC-13 - Purchase on DRAFT Sale'
+url: '{{baseUrl}}/api/v1/admin/sales'
+method: POST
+headers:
+  Content-Type: application/json
+auth:
+  type: bearer
+  credentials:
+    token: '{{accessToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "name": "EC Draft Sale (Never Activated)",
+      "startTime": "{{ecDraftSaleStart}}",
+      "endTime": "{{ecDraftSaleEnd}}"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      var now = new Date();
+      var start = new Date(now.getTime() + 5 * 60 * 1000);
+      var end   = new Date(now.getTime() + 65 * 60 * 1000);
+      function fmt(d) {
+          var p = n => String(n).padStart(2, '0');
+          return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) +
+                 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+      }
+      pm.collectionVariables.set('ecDraftSaleStart', fmt(start));
+      pm.collectionVariables.set('ecDraftSaleEnd', fmt(end));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('EC-13 setup: Draft sale created', function () {
+          pm.expect(pm.response.code).to.equal(200);
+          const j = pm.response.json();
+          pm.collectionVariables.set('ecDraftSaleUuid', j.saleUuid);
+          console.log('EC-13: Draft sale UUID (will NOT be activated):', j.saleUuid);
+      });
+    language: text/javascript
+order: 1000

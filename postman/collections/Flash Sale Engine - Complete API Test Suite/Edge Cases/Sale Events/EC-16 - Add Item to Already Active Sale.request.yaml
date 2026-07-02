@@ -1,0 +1,39 @@
+$kind: http-request
+name: 'EC-16 - Add Item to Already Active Sale'
+url: '{{baseUrl}}/api/v1/admin/sales/{{saleUuid}}/items'
+method: POST
+headers:
+  Content-Type: application/json
+auth:
+  type: bearer
+  credentials:
+    token: '{{accessToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "productUuid": "{{productUuid}}",
+      "salePrice": 1999.00,
+      "inventory": 5,
+      "maxPerUser": 1
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      // saleUuid points to the main sale activated in request 12 — it is ACTIVE
+      pm.test('EC-16: Adding item to an ACTIVE sale should return 409 SALE_ALREADY_ACTIVE', function () {
+          pm.expect(pm.response.code).to.equal(409,
+              'Expected 409 Conflict when adding item to an already-active sale, got: ' + pm.response.code +
+              '. SaleServiceImpl.addItemToSale() checks status != DRAFT and throws SaleAlreadyActiveException.');
+      });
+
+      pm.test('EC-16: Error code is SALE_ALREADY_ACTIVE', function () {
+          if (pm.response.code === 409) {
+              const j = pm.response.json();
+              pm.expect(j).to.have.property('errorCode');
+              pm.expect(j.errorCode).to.equal('SALE_ALREADY_ACTIVE',
+                  'Unexpected error code: ' + j.errorCode);
+          }
+      });
+    language: text/javascript
+order: 4000

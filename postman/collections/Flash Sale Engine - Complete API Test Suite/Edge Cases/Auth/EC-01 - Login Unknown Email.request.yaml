@@ -1,0 +1,34 @@
+$kind: http-request
+name: 'EC-01 - Login Unknown Email'
+url: '{{baseUrl}}/api/v1/auth/login'
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "ghost_user_does_not_exist@flashsale.com",
+      "password": "password123"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('EC-01: Login with unknown email should return 4xx (not 500)', function () {
+          pm.expect(pm.response.code).to.be.oneOf([400, 401, 404],
+              'Expected a client error, but got: ' + pm.response.code +
+              '. If this returns 500, the NoSuchElementException is unhandled in GlobalExceptionHandler.');
+      });
+
+      pm.test('EC-01: Response body is not an HTML error page', function () {
+          const text = pm.response.text();
+          pm.expect(text).to.not.include('<html',
+              'Got an HTML error page — Spring is leaking stack traces to the client.');
+      });
+
+      pm.test('EC-01: Response has a structured error body', function () {
+          pm.expect(pm.response.code).to.not.equal(500,
+              'KNOWN BUG: AuthService.loginUser() throws raw NoSuchElementException which is not mapped in GlobalExceptionHandler → falls through to 500.');
+      });
+    language: text/javascript
+order: 1000

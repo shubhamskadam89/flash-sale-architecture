@@ -1,14 +1,22 @@
 $kind: collection
+name: Flash Sale Engine - Complete API Test Suite
 description: |-
   Comprehensive Postman Collection covering all REST endpoints of the Flash Sale Engine.
 
   Run requests in order (01 → 17):
+
   1. Auth: register → login → /me
+      
   2. Products: create → get by UUID → list all
+      
   3. Sale Admin: create sale → add item → activate
+      
   4. Purchase & Orders: purchase item → get order
+      
   5. Token: refresh → logout
+      
   6. Rate limit & Redis pipeline tests
+      
 
   All tokens and UUIDs are automatically captured into collection variables.
 variables:

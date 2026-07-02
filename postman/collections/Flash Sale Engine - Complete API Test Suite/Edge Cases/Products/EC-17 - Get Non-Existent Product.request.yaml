@@ -1,0 +1,30 @@
+$kind: http-request
+name: 'EC-17 - Get Non-Existent Product UUID'
+url: '{{baseUrl}}/api/v1/products/00000000-0000-0000-0000-000000000000'
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: '{{accessToken}}'
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('EC-17: Non-existent product UUID should return 404', function () {
+          pm.expect(pm.response.code).to.equal(404,
+              'Expected 404 Not Found for a random UUID that does not exist, got: ' + pm.response.code);
+      });
+
+      pm.test('EC-17: Error code is PRODUCT_NOT_FOUND', function () {
+          if (pm.response.code === 404) {
+              const j = pm.response.json();
+              pm.expect(j).to.have.property('errorCode');
+              pm.expect(j.errorCode).to.equal('PRODUCT_NOT_FOUND',
+                  'Unexpected error code: ' + j.errorCode);
+          }
+      });
+
+      pm.test('EC-17: Response is JSON, not an HTML error page', function () {
+          pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');
+      });
+    language: text/javascript
+order: 1000

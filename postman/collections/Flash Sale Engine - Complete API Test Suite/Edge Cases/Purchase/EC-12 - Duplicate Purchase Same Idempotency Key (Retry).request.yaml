@@ -1,0 +1,55 @@
+$kind: http-request
+name: 'EC-12 - Duplicate Purchase Same Idempotency Key (Retry)'
+url: '{{baseUrl}}/api/v1/sales/{{saleUuid}}/items/{{saleItemUuid}}/purchase'
+method: POST
+headers:
+  Content-Type: application/json
+auth:
+  type: bearer
+  credentials:
+    token: '{{accessToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "quantity": 1
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Reuse the exact same idempotency key from EC-11
+      const fixedKey = pm.collectionVariables.get('ecDuplicateIdempotencyKey');
+      pm.request.headers.upsert({ key: 'X-Idempotency-Key', value: fixedKey });
+      console.log('EC-12: Retrying purchase with same idempotency key:', fixedKey);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('EC-12: Duplicate purchase with same idempotency key should return cached 200 (not a new order)', function () {
+          pm.expect(pm.response.code).to.equal(200,
+              'Expected 200 (cached idempotent response) for duplicate key, got: ' + pm.response.code);
+      });
+
+      pm.test('EC-12: Duplicate purchase returns the SAME orderUuid as the first purchase', function () {
+          if (pm.response.code === 200) {
+              const j = pm.response.json();
+              const firstOrderUuid = pm.collectionVariables.get('ecDuplicateOrderUuid');
+              pm.expect(j.orderUuid).to.equal(firstOrderUuid,
+                  'IDEMPOTENCY BUG: A different orderUuid was returned on retry — two orders were created for the same idempotency key!' +
+                  '\nFirst: ' + firstOrderUuid + '\nRetry: ' + j.orderUuid);
+          }
+      });
+
+      pm.test('EC-12: Inventory was NOT decremented twice', function () {
+          if (pm.response.code === 200) {
+              const j = pm.response.json();
+              const firstInventory = pm.collectionVariables.get('ecFirstPurchaseRemainingInventory');
+              if (firstInventory !== undefined && firstInventory !== null) {
+                  pm.expect(j.remainingInventory).to.equal(parseInt(firstInventory),
+                      'Inventory was decremented on the duplicate request — idempotency is broken at the Redis/Lua layer.');
+              } else {
+                  console.warn('EC-12: ecFirstPurchaseRemainingInventory not set — skipping inventory comparison.');
+              }
+          }
+      });
+    language: text/javascript
+order: 8000

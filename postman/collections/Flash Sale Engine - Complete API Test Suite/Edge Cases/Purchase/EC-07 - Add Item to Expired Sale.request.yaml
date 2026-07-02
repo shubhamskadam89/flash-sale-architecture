@@ -1,0 +1,31 @@
+$kind: http-request
+name: 'EC-07 - Add Item to Expired Sale (setup)'
+url: '{{baseUrl}}/api/v1/admin/sales/{{ecExpiredSaleUuid}}/items'
+method: POST
+headers:
+  Content-Type: application/json
+auth:
+  type: bearer
+  credentials:
+    token: '{{accessToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "productUuid": "{{productUuid}}",
+      "salePrice": 3999.00,
+      "inventory": 50,
+      "maxPerUser": 2
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('EC-07 setup: Item added to expired sale', function () {
+          pm.expect(pm.response.code).to.equal(200);
+          const j = pm.response.json();
+          pm.expect(j).to.have.property('saleItemUuid');
+          pm.collectionVariables.set('ecExpiredSaleItemUuid', j.saleItemUuid);
+          console.log('EC-07: Expired sale item UUID:', j.saleItemUuid);
+      });
+    language: text/javascript
+order: 3000

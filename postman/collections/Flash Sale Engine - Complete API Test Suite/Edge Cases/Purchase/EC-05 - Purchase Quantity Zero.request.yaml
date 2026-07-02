@@ -1,0 +1,42 @@
+$kind: http-request
+name: 'EC-05 - Purchase Quantity Zero'
+url: '{{baseUrl}}/api/v1/sales/{{saleUuid}}/items/{{saleItemUuid}}/purchase'
+method: POST
+headers:
+  Content-Type: application/json
+  X-Idempotency-Key: 'ec-test-qty-zero-{{$guid}}'
+body:
+  type: json
+  content: |-
+    {
+      "quantity": 0
+    }
+auth:
+  type: bearer
+  credentials:
+    token: '{{accessToken}}'
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Generate a fresh idempotency key so this test is always independent
+      const key = 'ec-qty-zero-' + pm.variables.replaceIn('{{$guid}}');
+      pm.request.headers.upsert({ key: 'X-Idempotency-Key', value: key });
+      console.log('EC-05 idempotency key:', key);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('EC-05: quantity=0 should be rejected with 4xx', function () {
+          pm.expect(pm.response.code).to.be.within(400, 499,
+              'Expected a client error for quantity=0, got: ' + pm.response.code +
+              '. If 200, the Lua script accepted a zero-quantity purchase — inventory was decremented by 0 but an order was queued.');
+      });
+
+      pm.test('EC-05: Response must not contain orderUuid on failure', function () {
+          if (pm.response.code >= 400) {
+              const text = pm.response.text();
+              pm.expect(text).to.not.include('orderUuid',
+                  'An orderUuid was returned for a quantity=0 purchase — ghost order created.');
+          }
+      });
+    language: text/javascript
+order: 1000

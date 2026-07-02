@@ -1,0 +1,40 @@
+$kind: http-request
+name: 'EC-11 - Duplicate Purchase Same Idempotency Key (First)'
+url: '{{baseUrl}}/api/v1/sales/{{saleUuid}}/items/{{saleItemUuid}}/purchase'
+method: POST
+headers:
+  Content-Type: application/json
+auth:
+  type: bearer
+  credentials:
+    token: '{{accessToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "quantity": 1
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Pin a fixed idempotency key so EC-12 can reuse the exact same one
+      const fixedKey = 'ec-idempotency-duplicate-test-key';
+      pm.collectionVariables.set('ecDuplicateIdempotencyKey', fixedKey);
+      pm.request.headers.upsert({ key: 'X-Idempotency-Key', value: fixedKey });
+      console.log('EC-11: First purchase with idempotency key:', fixedKey);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('EC-11: First purchase should succeed with 200', function () {
+          pm.expect(pm.response.code).to.equal(200,
+              'First purchase failed — EC-12 duplicate test will not be meaningful. Got: ' + pm.response.code);
+      });
+
+      if (pm.response.code === 200) {
+          const j = pm.response.json();
+          pm.collectionVariables.set('ecDuplicateOrderUuid', j.orderUuid);
+          pm.collectionVariables.set('ecFirstPurchaseRemainingInventory', String(j.remainingInventory));
+          console.log('EC-11: First purchase orderUuid:', j.orderUuid, '| remainingInventory:', j.remainingInventory);
+      }
+    language: text/javascript
+order: 7000

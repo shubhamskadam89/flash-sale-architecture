@@ -1,0 +1,46 @@
+$kind: http-request
+name: 'EC-06 - Purchase on Expired Sale'
+url: '{{baseUrl}}/api/v1/admin/sales'
+method: POST
+headers:
+  Content-Type: application/json
+auth:
+  type: bearer
+  credentials:
+    token: '{{accessToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "name": "EC Expired Sale",
+      "startTime": "{{ecExpiredSaleStart}}",
+      "endTime": "{{ecExpiredSaleEnd}}"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Create a sale that starts 10 seconds from now and ends 11 seconds from now
+      // By the time we activate + purchase, it will be expired
+      var now = new Date();
+      var start = new Date(now.getTime() + 10 * 1000);
+      var end   = new Date(now.getTime() + 11 * 1000);
+      function fmt(d) {
+          var p = n => String(n).padStart(2, '0');
+          return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) +
+                 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+      }
+      pm.collectionVariables.set('ecExpiredSaleStart', fmt(start));
+      pm.collectionVariables.set('ecExpiredSaleEnd', fmt(end));
+      console.log('EC-06: Expired sale window:', fmt(start), '->', fmt(end));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('EC-06 setup: Expired sale created successfully', function () {
+          pm.expect(pm.response.code).to.equal(200);
+          const j = pm.response.json();
+          pm.expect(j).to.have.property('saleUuid');
+          pm.collectionVariables.set('ecExpiredSaleUuid', j.saleUuid);
+          console.log('EC-06: Expired sale UUID:', j.saleUuid);
+      });
+    language: text/javascript
+order: 2000

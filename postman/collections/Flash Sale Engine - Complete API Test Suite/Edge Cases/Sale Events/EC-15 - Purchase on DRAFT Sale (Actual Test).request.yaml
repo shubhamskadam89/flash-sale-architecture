@@ -1,0 +1,46 @@
+$kind: http-request
+name: 'EC-15 - Purchase on DRAFT Sale (Actual Test)'
+url: '{{baseUrl}}/api/v1/sales/{{ecDraftSaleUuid}}/items/{{ecDraftSaleItemUuid}}/purchase'
+method: POST
+headers:
+  Content-Type: application/json
+auth:
+  type: bearer
+  credentials:
+    token: '{{accessToken}}'
+body:
+  type: json
+  content: |-
+    {
+      "quantity": 1
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Sale was created but NEVER activated — status is still DRAFT
+      const key = 'ec-draft-sale-' + pm.variables.replaceIn('{{$guid}}');
+      pm.request.headers.upsert({ key: 'X-Idempotency-Key', value: key });
+      console.log('EC-15: Attempting purchase on DRAFT (never activated) sale...');
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('EC-15: Purchase on DRAFT sale should return 409 SALE_NOT_ACTIVE', function () {
+          pm.expect(pm.response.code).to.equal(409,
+              'Expected 409 Conflict for DRAFT sale purchase, got: ' + pm.response.code +
+              '. validateSaleEvent() should throw SaleNotActiveException when status != ACTIVE.');
+      });
+
+      pm.test('EC-15: Error code is SALE_NOT_ACTIVE', function () {
+          if (pm.response.code === 409) {
+              const j = pm.response.json();
+              pm.expect(j).to.have.property('errorCode');
+              pm.expect(j.errorCode).to.equal('SALE_NOT_ACTIVE',
+                  'Unexpected error code: ' + j.errorCode);
+          }
+      });
+
+      pm.test('EC-15: No orderUuid returned for DRAFT sale purchase', function () {
+          pm.expect(pm.response.text()).to.not.include('orderUuid');
+      });
+    language: text/javascript
+order: 3000
