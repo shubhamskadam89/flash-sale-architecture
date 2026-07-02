@@ -6,8 +6,8 @@ import com.shubham.flashsale.ratelimit.RateLimitingStrategy;
 import com.shubham.flashsale.common.redis.RedisKeyBuilder;
 import com.shubham.flashsale.ratelimit.identity.RateLimitIdentity;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -20,6 +20,7 @@ import java.util.UUID;
 public class SlidingWindowStrategy implements RateLimitingStrategy {
 
     private final StringRedisTemplate redisTemplate;
+    private final RedisScript<List> slidingWindowScript;
     private final RateLimitProperties properties;
 
     @Override
@@ -36,52 +37,27 @@ public class SlidingWindowStrategy implements RateLimitingStrategy {
                 now -
                         (properties.getWindowSeconds() * 1000L);
 
+        String member = UUID.randomUUID().toString();
 
-        // TODO: migrate to newer RedisConnection API when upgrading rate limiter infrastructure
-        List<Object> results =
-                redisTemplate.executePipelined(
-                        (RedisCallback<Object>) connection -> {
+        List<?> result = redisTemplate.execute(
+                slidingWindowScript,
+                List.of(key),
+                String.valueOf(windowStart),
+                String.valueOf(now),
+                member,
+                String.valueOf(properties.getMaxRequests()),
+                String.valueOf(properties.getWindowSeconds() * 2L)
+        );
 
-                            byte[] redisKey =
-                                    key.getBytes();
+        if (result == null || result.size() < 2) {
+            throw new IllegalStateException("Lua script returned invalid result");
+        }
 
-                            connection.zRemRangeByScore(
-                                    redisKey,
-                                    0,
-                                    windowStart
-                            );
+        long allowedVal = ((Number) result.get(0)).longValue();
+        long count = ((Number) result.get(1)).longValue();
 
-                            connection.zAdd(
-                                    redisKey,
-                                    now,
-                                    UUID.randomUUID()
-                                            .toString()
-                                            .getBytes()
-                            );
-
-                            connection.zCard(redisKey);
-
-                            connection.expire(
-                                    redisKey,
-                                    properties.getWindowSeconds() * 2L
-                            );
-
-                            return null;
-                        }
-                );
-
-
-
-        long count =
-                ((Number) results.get(2))
-                        .longValue();
-
-        long remaining = Math.max(0,properties.getMaxRequests()-count);
-
-        boolean allowed = count <= properties.getMaxRequests();
-
-
-
+        long remaining = Math.max(0, properties.getMaxRequests() - count);
+        boolean allowed = allowedVal == 1;
 
         return new RateLimitResult(
                 allowed,

@@ -21,13 +21,13 @@ spring:
 
   data:
     redis:
-      host: localhost
+      host: 127.0.0.1
       port: 6379
 
       lettuce:
         pool:
-          max-active: 8
-          max-idle: 8
+          max-active: 100
+          max-idle: 50
           min-idle: 2
           max-wait: 1000ms
 
