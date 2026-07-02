@@ -6,9 +6,9 @@ import com.shubham.flashsale.auth.service.AuthService;
 import com.shubham.flashsale.user.dto.LoginDto;
 import com.shubham.flashsale.user.dto.RegistrartionDto;
 import com.shubham.flashsale.user.dto.UserResponseDto;
+import com.shubham.flashsale.user.entity.UserRole;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -22,8 +22,15 @@ public class AuthController {
     public ResponseEntity<UserResponseDto> registerUser(
             @RequestBody RegistrartionDto registrationDto) {
 
+        RegistrartionDto userRegistration = new RegistrartionDto(
+                registrationDto.email(),
+                registrationDto.password(),
+                UserRole.USER,
+                registrationDto.fullName()
+        );
+
         return ResponseEntity.ok(
-                authService.registerUser(registrationDto)
+                authService.registerUser(userRegistration)
         );
     }
 
@@ -54,7 +61,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<String> me(Authentication authentication) {
-        return ResponseEntity.ok(authentication.getName());
+    public ResponseEntity<UserResponseDto> me() {
+        return ResponseEntity.ok(authService.getMe());
     }
 }

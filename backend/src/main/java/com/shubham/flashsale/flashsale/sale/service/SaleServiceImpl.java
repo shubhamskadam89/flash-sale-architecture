@@ -10,6 +10,7 @@ import com.shubham.flashsale.exception.sale.SaleEventNotFoundException;
 import com.shubham.flashsale.flashsale.common.CommonFlashSaleService;
 import com.shubham.flashsale.flashsale.sale.dto.AddSaleItemRequest;
 import com.shubham.flashsale.flashsale.sale.dto.CreateSaleRequest;
+import com.shubham.flashsale.flashsale.sale.dto.SaleDetailResponse;
 import com.shubham.flashsale.flashsale.sale.dto.SaleItemResponse;
 import com.shubham.flashsale.flashsale.sale.dto.SaleResponse;
 import com.shubham.flashsale.flashsale.sale.entity.SaleEvent;
@@ -149,6 +150,17 @@ public class SaleServiceImpl implements SaleService {
         SaleEvent saleEvent = saleEventRepository.findByUuid(saleUuid)
                 .orElseThrow(() -> new SaleEventNotFoundException(saleUuid));
 
+        if (saleEvent.getStatus() == Status.ACTIVE) {
+            log.info("Sale is already active; returning current state without reinitializing inventory saleUuid={}", saleUuid);
+            return SaleResponse.builder()
+                    .saleUuid(UUID.fromString(saleEvent.getUuid()))
+                    .name(saleEvent.getName())
+                    .startTime(saleEvent.getStartTime())
+                    .endTime(saleEvent.getEndTime())
+                    .status(saleEvent.getStatus())
+                    .build();
+        }
+
         if (saleEvent.getStatus() != Status.DRAFT) {
             throw new InvalidSaleException("Sale is not in draft state");
         }
@@ -160,12 +172,34 @@ public class SaleServiceImpl implements SaleService {
         }
 
         saleItems.forEach(saleItem -> {
+            if (saleItem.getInventory() == null || saleItem.getInventory() <= 0) {
+                throw new InvalidSaleException("Sale item inventory must be positive before activation");
+            }
+
+            if (saleItem.getSalePrice() == null || saleItem.getSalePrice().signum() <= 0) {
+                throw new InvalidSaleException("Sale item price must be positive before activation");
+            }
+
+            if (!Boolean.TRUE.equals(saleItem.getProduct().getIsActive())) {
+                throw new InvalidSaleException("Inactive products cannot be activated for sale");
+            }
+
             String inventoryKey = RedisKeyBuilder.inventory(saleItem.getUuid());
 
-            redisTemplate.opsForValue().set(
+            Boolean initialized = redisTemplate.opsForValue().setIfAbsent(
                     inventoryKey,
                     String.valueOf(saleItem.getInventory())
             );
+
+            if (Boolean.FALSE.equals(initialized)) {
+                log.info(
+                        "Redis inventory already exists; leaving current value unchanged. saleUuid={}, saleItemUuid={}, inventoryKey={}",
+                        saleEvent.getUuid(),
+                        saleItem.getUuid(),
+                        inventoryKey
+                );
+                return;
+            }
 
             log.info(
                     "Loaded sale item inventory into Redis. saleUuid={}, saleItemUuid={}, inventoryKey={}, inventory={}",
@@ -206,6 +240,82 @@ public class SaleServiceImpl implements SaleService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public SaleDetailResponse getSaleDetail(String saleUuid) {
+        SaleEvent saleEvent = saleEventRepository.findByUuid(saleUuid)
+                .orElseThrow(() -> new SaleEventNotFoundException(saleUuid));
+
+        return toSaleDetailResponse(saleEvent);
+    }
+
+    @Override
+    @Transactional
+    public List<SaleDetailResponse> getAdminSales() {
+        User currentUser = commonAuthService.getCurrentUser();
+
+        if (currentUser.getRole().name().equals("ADMIN")) {
+            return saleEventRepository.findAllByOrderByCreatedAtDesc()
+                    .stream()
+                    .map(this::toSaleDetailResponse)
+                    .toList();
+        }
+
+        return saleEventRepository.findByCreatedByOrderByCreatedAtDesc(currentUser)
+                .stream()
+                .map(this::toSaleDetailResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public List<SaleDetailResponse> getAvailableSales() {
+        return saleEventRepository.findByStatus(Status.ACTIVE)
+                .stream()
+                .map(this::toSaleDetailResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public List<SaleItemResponse> getSaleItems(String saleUuid) {
+        SaleEvent saleEvent = saleEventRepository.findByUuid(saleUuid)
+                .orElseThrow(() -> new SaleEventNotFoundException(saleUuid));
+
+        return saleItemRepository.findBySaleEvent(saleEvent)
+                .stream()
+                .map(this::toSaleItemResponse)
+                .toList();
+    }
+
+    private SaleDetailResponse toSaleDetailResponse(SaleEvent saleEvent) {
+        return SaleDetailResponse.builder()
+                .saleUuid(UUID.fromString(saleEvent.getUuid()))
+                .name(saleEvent.getName())
+                .startTime(saleEvent.getStartTime())
+                .endTime(saleEvent.getEndTime())
+                .status(saleEvent.getStatus())
+                .items(saleEvent.getSaleItems()
+                        .stream()
+                        .map(this::toSaleItemResponse)
+                        .toList())
+                .build();
+    }
+
+    private SaleItemResponse toSaleItemResponse(SaleItem saleItem) {
+        Product product = saleItem.getProduct();
+
+        return SaleItemResponse.builder()
+                .saleItemUuid(UUID.fromString(saleItem.getUuid()))
+                .saleEventUuid(UUID.fromString(saleItem.getSaleEvent().getUuid()))
+                .productUuid(UUID.fromString(product.getUuid()))
+                .productName(product.getName())
+                .salePrice(saleItem.getSalePrice())
+                .inventory(saleItem.getInventory())
+                .finalCount(saleItem.getFinalCount())
+                .maxPerUser(saleItem.getMaxPerUser())
+                .build();
+    }
 
 
 

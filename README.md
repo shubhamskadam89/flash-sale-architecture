@@ -6,6 +6,30 @@ A high-performance, production-grade distributed system blueprint built with **S
 
 ---
 
+## Frontend Console
+
+The repository includes a React + TypeScript Vite frontend for the confirmed API suite.
+
+```bash
+cd frontend
+npm install
+cp .env.example .env
+npm run dev
+```
+
+`VITE_API_BASE_URL` defaults to `http://localhost:8080`. The UI intentionally uses a UUID-driven Purchase Workspace instead of a sale listing/detail page because those read endpoints are not part of the confirmed backend contract yet.
+
+Useful commands:
+
+```bash
+npm run build
+npm run lint
+```
+
+New local users can be created at `/setup/register`. That screen is intentionally setup/admin oriented, not a public shopping registration flow.
+
+---
+
 ## 1. System Architecture & Request Flow
 
 The system uses a layered architecture where requests pass through filters (security, rate limiting, and idempotency) before reaching the controller and service layers. Redis serves as the single source of truth for real-time state, while MySQL serves as the transactional system of record.

@@ -6,6 +6,10 @@
 *.iws
 *.ipr
 backend/.idea
+node_modules/
+node-node_modules/
+.env
+.env.example
 
 
 # =========================
@@ -83,6 +87,11 @@ redis_data/
 # =========================
 coverage/
 jacoco.exec
+dist/
+node_modules/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
 
 # =========================
 # Misc
