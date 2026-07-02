@@ -32,4 +32,12 @@ public class LuaScriptConfig {
         script.setResultType(List.class);
         return script;
     }
+
+    @Bean
+    public RedisScript<List> slidingWindowScript() {
+        DefaultRedisScript<List> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("scripts/lua/sliding_window.lua"));
+        script.setResultType(List.class);
+        return script;
+    }
 }
