@@ -1,10 +1,10 @@
-package com.shubham.flashsale.ratelimit.algorithm;
+package com.shubham.flashsale.ratelimit.strategy;
 
-import com.shubham.flashsale.ratelimit.RateLimitProperties;
-import com.shubham.flashsale.ratelimit.RateLimitResult;
-import com.shubham.flashsale.ratelimit.RateLimitingStrategy;
+import com.shubham.flashsale.ratelimit.config.PolicyConfiguration;
+import com.shubham.flashsale.ratelimit.dto.RateLimitResult;
 import com.shubham.flashsale.common.redis.RedisKeyBuilder;
-import com.shubham.flashsale.ratelimit.identity.RateLimitIdentity;
+import com.shubham.flashsale.ratelimit.resolver.identity.RateLimitIdentity;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -18,15 +18,17 @@ import java.time.Duration;
 public class FixedWindowStrategy implements RateLimitingStrategy {
 
     private final StringRedisTemplate stringRedisTemplate;
-    private final RateLimitProperties rateLimitProperties;
-
-
 
     @Override
-    public RateLimitResult checkLimit(RateLimitIdentity identifier){
+    public RateLimitResult checkLimit(
+            RateLimitIdentity identity,
+            PolicyConfiguration configuration,
+            RateLimitPolicy policy
+    ) {
         String key =
                 RedisKeyBuilder.fixedWindow(
-                        identifier.key()
+                        policy.name(),
+                        identity.key()
                 );
 
         Long count  =  stringRedisTemplate
@@ -40,16 +42,17 @@ public class FixedWindowStrategy implements RateLimitingStrategy {
 
         if(count==1){
             stringRedisTemplate.expire(key,
-                    Duration.ofSeconds(rateLimitProperties.getWindowSeconds()));
+                    Duration.ofSeconds(configuration.getWindow()));
         }
         Long remaining  = Math.max(0,
-                rateLimitProperties.getMaxRequests()-count);
+                configuration.getRequests()-count);
 
-        boolean allowed  = count<= rateLimitProperties.getMaxRequests();
+        boolean allowed  = count<= configuration.getRequests();
 
         log.debug("Fixed window rate limit check for key={}, count={}, allowed={}", key, count, allowed);
 
         return new RateLimitResult(allowed,
+                configuration.getRequests(),
                 count,
                 remaining,
                 null);

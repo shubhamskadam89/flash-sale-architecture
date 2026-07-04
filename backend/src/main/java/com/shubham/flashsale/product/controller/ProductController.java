@@ -3,6 +3,8 @@ package com.shubham.flashsale.product.controller;
 import com.shubham.flashsale.product.dto.CreateProductRequest;
 import com.shubham.flashsale.product.dto.ProductResponse;
 import com.shubham.flashsale.product.service.ProductService;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
+import com.shubham.flashsale.ratelimit.annotation.RateLimit;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +21,7 @@ public class ProductController {
     private final ProductService productService;
 
     @PostMapping
+    @RateLimit(policy = RateLimitPolicy.ADMIN)
     public ResponseEntity<ProductResponse> createProduct(
             @Valid @RequestBody CreateProductRequest request
     ) {
@@ -26,6 +29,7 @@ public class ProductController {
     }
 
     @GetMapping("/{productUuid}")
+    @RateLimit(policy = RateLimitPolicy.GENERAL)
     public ResponseEntity<ProductResponse> getProduct(
             @PathVariable UUID productUuid
     ) {
@@ -33,6 +37,7 @@ public class ProductController {
     }
 
     @GetMapping
+    @RateLimit(policy = RateLimitPolicy.GENERAL)
     public ResponseEntity<List<ProductResponse>> getAllProducts() {
         return ResponseEntity.ok(productService.getAllProducts());
     }

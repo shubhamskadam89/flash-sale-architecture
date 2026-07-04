@@ -4,10 +4,7 @@ import com.shubham.flashsale.common.cache.CacheNames;
 import com.shubham.flashsale.common.service.CommonAuthService;
 import com.shubham.flashsale.common.redis.RedisKeyBuilder;
 import com.shubham.flashsale.exception.product.NoSuchProductException;
-import com.shubham.flashsale.exception.sale.DuplicateSaleItemException;
-import com.shubham.flashsale.exception.sale.InvalidSaleException;
-import com.shubham.flashsale.exception.sale.SaleAlreadyActiveException;
-import com.shubham.flashsale.exception.sale.SaleEventNotFoundException;
+import com.shubham.flashsale.exception.sale.*;
 import com.shubham.flashsale.flashsale.common.CommonFlashSaleService;
 import com.shubham.flashsale.flashsale.sale.dto.AddSaleItemRequest;
 import com.shubham.flashsale.flashsale.sale.dto.CreateSaleRequest;
@@ -22,16 +19,19 @@ import com.shubham.flashsale.flashsale.sale.repository.SaleItemRepository;
 import com.shubham.flashsale.product.entity.Product;
 import com.shubham.flashsale.product.repository.ProductRepository;
 import com.shubham.flashsale.user.entity.User;
+import com.shubham.flashsale.user.entity.UserRole;
 import com.shubham.flashsale.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.coyote.BadRequestException;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.file.InvalidPathException;
 import java.util.List;
 import java.util.UUID;
 
@@ -271,8 +271,16 @@ public class SaleServiceImpl implements SaleService {
     public SaleDetailResponse getSaleDetail(String saleUuid) {
         SaleEvent saleEvent = saleEventRepository.findByUuid(saleUuid)
                 .orElseThrow(() -> new SaleEventNotFoundException(saleUuid));
+        User currentUser = commonAuthService.getCurrentUser();
+        if (currentUser.getRole() == UserRole.ADMIN) {
+            return toSaleDetailResponse(saleEvent);
+        }
 
-        return toSaleDetailResponse(saleEvent);
+        if (saleEvent.getStatus() == Status.ACTIVE) {
+            return toSaleDetailResponse(saleEvent);
+        }
+        throw new UnauthorizationException("You are not allowed to access this sale");
+
     }
 
     @Override

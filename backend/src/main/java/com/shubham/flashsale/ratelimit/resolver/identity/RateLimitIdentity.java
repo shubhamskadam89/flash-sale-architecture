@@ -1,6 +1,4 @@
-package com.shubham.flashsale.ratelimit.identity;
-
-import lombok.Getter;
+package com.shubham.flashsale.ratelimit.resolver.identity;
 
 
 public record RateLimitIdentity(

@@ -3,6 +3,8 @@ package com.shubham.flashsale.flashsale.order.controller;
 import com.shubham.flashsale.flashsale.order.dto.PurchaseRequest;
 import com.shubham.flashsale.flashsale.order.dto.PurchaseResponse;
 import com.shubham.flashsale.flashsale.order.service.PurchaseService;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
+import com.shubham.flashsale.ratelimit.annotation.RateLimit;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +20,7 @@ public class PurchaseController {
     private final PurchaseService purchaseService;
 
     @PostMapping("/{saleUuid}/items/{saleItemUuid}/purchase")
+    @RateLimit(policy = RateLimitPolicy.TRANSACTION)
     public ResponseEntity<PurchaseResponse> purchase(
             @PathVariable UUID saleUuid,
             @PathVariable UUID saleItemUuid,

@@ -1,10 +1,10 @@
-package com.shubham.flashsale.ratelimit.algorithm;
+package com.shubham.flashsale.ratelimit.strategy;
 
-import com.shubham.flashsale.ratelimit.RateLimitProperties;
-import com.shubham.flashsale.ratelimit.RateLimitResult;
-import com.shubham.flashsale.ratelimit.RateLimitingStrategy;
+import com.shubham.flashsale.ratelimit.config.PolicyConfiguration;
+import com.shubham.flashsale.ratelimit.dto.RateLimitResult;
 import com.shubham.flashsale.common.redis.RedisKeyBuilder;
-import com.shubham.flashsale.ratelimit.identity.RateLimitIdentity;
+import com.shubham.flashsale.ratelimit.resolver.identity.RateLimitIdentity;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -23,13 +23,17 @@ public class SlidingWindowStrategy implements RateLimitingStrategy {
 
     private final StringRedisTemplate redisTemplate;
     private final RedisScript<List> slidingWindowScript;
-    private final RateLimitProperties properties;
 
     @Override
-    public RateLimitResult checkLimit(RateLimitIdentity identifier) {
+    public RateLimitResult checkLimit(
+            RateLimitIdentity identity,
+            PolicyConfiguration configuration,
+            RateLimitPolicy policy
+    ) {
         String key =
                 RedisKeyBuilder.slidingWindow(
-                        identifier.key()
+                        policy.name(),
+                        identity.key()
                 );
 
         long now =
@@ -37,7 +41,7 @@ public class SlidingWindowStrategy implements RateLimitingStrategy {
 
         long windowStart =
                 now -
-                        (properties.getWindowSeconds() * 1000L);
+                        (configuration.getWindow() * 1000L);
 
         String member = UUID.randomUUID().toString();
 
@@ -47,8 +51,8 @@ public class SlidingWindowStrategy implements RateLimitingStrategy {
                 String.valueOf(windowStart),
                 String.valueOf(now),
                 member,
-                String.valueOf(properties.getMaxRequests()),
-                String.valueOf(properties.getWindowSeconds() * 2L)
+                String.valueOf(configuration.getRequests()),
+                String.valueOf(configuration.getWindow() * 2L)
         );
 
         if (result == null || result.size() < 2) {
@@ -59,13 +63,14 @@ public class SlidingWindowStrategy implements RateLimitingStrategy {
         long allowedVal = ((Number) result.get(0)).longValue();
         long count = ((Number) result.get(1)).longValue();
 
-        long remaining = Math.max(0, properties.getMaxRequests() - count);
+        long remaining = Math.max(0, configuration.getRequests() - count);
         boolean allowed = allowedVal == 1;
 
         log.debug("Sliding window check key={}, allowed={}, count={}", key, allowed, count);
 
         return new RateLimitResult(
                 allowed,
+                configuration.getRequests(),
                 count,
                 remaining,
                 null

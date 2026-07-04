@@ -2,6 +2,8 @@ package com.shubham.flashsale.flashsale.inventory.controller;
 
 import com.shubham.flashsale.flashsale.inventory.dto.InventoryResponse;
 import com.shubham.flashsale.flashsale.inventory.service.InventoryQueryService;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
+import com.shubham.flashsale.ratelimit.annotation.RateLimit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +18,7 @@ public class InventoryController {
     private final InventoryQueryService inventoryQueryService;
 
     @GetMapping("/{saleItemUuid}/inventory")
+    @RateLimit(policy = RateLimitPolicy.GENERAL)
     public ResponseEntity<InventoryResponse> getInventory(
             @PathVariable UUID saleItemUuid
     ) {

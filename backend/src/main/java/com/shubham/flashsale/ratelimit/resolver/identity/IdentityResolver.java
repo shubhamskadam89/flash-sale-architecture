@@ -1,4 +1,4 @@
-package com.shubham.flashsale.ratelimit.identity;
+package com.shubham.flashsale.ratelimit.resolver.identity;
 
 
 import jakarta.servlet.http.HttpServletRequest;

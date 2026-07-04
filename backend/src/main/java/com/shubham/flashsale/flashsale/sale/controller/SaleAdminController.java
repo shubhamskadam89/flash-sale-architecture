@@ -7,9 +7,9 @@ import com.shubham.flashsale.flashsale.sale.dto.SaleDetailResponse;
 import com.shubham.flashsale.flashsale.sale.dto.SaleItemResponse;
 import com.shubham.flashsale.flashsale.sale.dto.SaleResponse;
 import com.shubham.flashsale.flashsale.sale.service.SaleService;
-import com.shubham.flashsale.flashsale.sale.service.SaleServiceImpl;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
+import com.shubham.flashsale.ratelimit.annotation.RateLimit;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,11 +25,13 @@ public class SaleAdminController {
     private final SaleService saleService;
 
     @GetMapping
+    @RateLimit(policy = RateLimitPolicy.ADMIN)
     public ResponseEntity<List<SaleDetailResponse>> getSales() {
         return ResponseEntity.ok(saleService.getAdminSales());
     }
 
     @GetMapping("/{saleUuid}")
+    @RateLimit(policy = RateLimitPolicy.ADMIN)
     public ResponseEntity<SaleDetailResponse> getSale(
             @PathVariable UUID saleUuid
     ) {
@@ -37,6 +39,7 @@ public class SaleAdminController {
     }
 
     @GetMapping("/{saleUuid}/items")
+    @RateLimit(policy = RateLimitPolicy.ADMIN)
     public ResponseEntity<List<SaleItemResponse>> getSaleItems(
             @PathVariable UUID saleUuid
     ) {
@@ -44,6 +47,7 @@ public class SaleAdminController {
     }
 
     @PostMapping
+    @RateLimit(policy = RateLimitPolicy.ADMIN)
     public ResponseEntity<SaleResponse> createSale(
             @RequestBody CreateSaleRequest request
     ) {
@@ -53,6 +57,7 @@ public class SaleAdminController {
     }
 
     @PostMapping("/{saleUuid}/activate")
+    @RateLimit(policy = RateLimitPolicy.ADMIN)
     public ResponseEntity<SaleResponse> activateSale(
             @PathVariable UUID saleUuid
     ) {
@@ -62,6 +67,7 @@ public class SaleAdminController {
     }
 
     @PostMapping("/{saleUuid}/items")
+    @RateLimit(policy = RateLimitPolicy.ADMIN)
     public ResponseEntity<SaleItemResponse> addItemToSale(
             @PathVariable UUID saleUuid,
             @RequestBody AddSaleItemRequest request
