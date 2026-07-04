@@ -3,6 +3,8 @@ package com.shubham.flashsale.auth.controller;
 import com.shubham.flashsale.auth.dto.AuthResponse;
 import com.shubham.flashsale.auth.dto.RefreshRequest;
 import com.shubham.flashsale.auth.service.AuthService;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
+import com.shubham.flashsale.ratelimit.annotation.RateLimit;
 import com.shubham.flashsale.user.dto.LoginDto;
 import com.shubham.flashsale.user.dto.RegistrartionDto;
 import com.shubham.flashsale.user.dto.UserResponseDto;
@@ -19,6 +21,7 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
+    @RateLimit(policy = RateLimitPolicy.AUTH)
     public ResponseEntity<UserResponseDto> registerUser(
             @RequestBody RegistrartionDto registrationDto) {
 
@@ -35,6 +38,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
+    @RateLimit(policy = RateLimitPolicy.AUTH)
     public ResponseEntity<AuthResponse> loginUser(
             @RequestBody LoginDto loginDto) {
 
@@ -44,6 +48,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
+    @RateLimit(policy = RateLimitPolicy.AUTH)
     public ResponseEntity<AuthResponse> refresh(
             @RequestBody RefreshRequest request) {
 
@@ -53,6 +58,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @RateLimit(policy = RateLimitPolicy.AUTH)
     public ResponseEntity<Void> logout(
             @RequestBody RefreshRequest request) {
 

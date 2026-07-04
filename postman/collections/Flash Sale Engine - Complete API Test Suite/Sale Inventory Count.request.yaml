@@ -1,0 +1,9 @@
+$kind: http-request
+name: Sale Inventory Count
+url: http://localhost:8080/api/v1/sale-items/7a045152-dbfe-443d-b5d2-0cb49829cd28/inventory
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: ""
+order: 4196850045288447

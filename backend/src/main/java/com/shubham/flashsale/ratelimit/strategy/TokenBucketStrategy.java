@@ -1,8 +1,10 @@
-package com.shubham.flashsale.ratelimit.algorithm;
+package com.shubham.flashsale.ratelimit.strategy;
 
 import com.shubham.flashsale.common.redis.RedisKeyBuilder;
-import com.shubham.flashsale.ratelimit.*;
-import com.shubham.flashsale.ratelimit.identity.RateLimitIdentity;
+import com.shubham.flashsale.ratelimit.dto.RateLimitResult;
+import com.shubham.flashsale.ratelimit.config.PolicyConfiguration;
+import com.shubham.flashsale.ratelimit.resolver.identity.RateLimitIdentity;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -18,21 +20,25 @@ public class TokenBucketStrategy  implements RateLimitingStrategy {
 
     private final StringRedisTemplate redisTemplate;
     private final RedisScript<List> tokenBucketScript;
-    private final RateLimitProperties properties;
 
     @Override
-    public RateLimitResult checkLimit(RateLimitIdentity identifier) {
+    public RateLimitResult checkLimit(
+            RateLimitIdentity identity,
+            PolicyConfiguration configuration,
+            RateLimitPolicy policy
+    ) {
         String key =
                 RedisKeyBuilder.tokenBucket(
-                        identifier.key()
+                        policy.name(),
+                        identity.key()
                 );
 
         List<?> result =
                 redisTemplate.execute(
                         tokenBucketScript,
                         List.of(key),
-                        String.valueOf(properties.getBurstCapacity()),
-                        String.valueOf(properties.getRefillRate()),
+                        String.valueOf(configuration.getBurst()),
+                        String.valueOf(configuration.getRefill()),
                         String.valueOf(System.currentTimeMillis())
                 );
         log.debug("Token bucket lua script result: {} for key: {}", result, key);
@@ -49,6 +55,7 @@ public class TokenBucketStrategy  implements RateLimitingStrategy {
         if (allowed == 1) {
             return new RateLimitResult(
                     true,
+                    configuration.getBurst(),
                     0,
                     value,      // remaining tokens
                     null
@@ -57,6 +64,7 @@ public class TokenBucketStrategy  implements RateLimitingStrategy {
 
         return new RateLimitResult(
                 false,
+                configuration.getBurst(),
                 0,
                 0,
                 value          // retryAfterMs

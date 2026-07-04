@@ -10,16 +10,16 @@ public final class RedisKeyBuilder {
     // Rate Limiting
     // ===========================
 
-    public static String fixedWindow(String identifier) {
-        return "rate:fw:" + identifier;
+    public static String fixedWindow(String policy, String identifier) {
+        return "rate:fw:" + policy + ":" + identifier;
     }
 
-    public static String slidingWindow(String identifier) {
-        return "rate:sw:" + identifier;
+    public static String slidingWindow(String policy, String identifier) {
+        return "rate:sw:" + policy + ":" + identifier;
     }
 
-    public static String tokenBucket(String identifier) {
-        return "rate:tb:" + identifier;
+    public static String tokenBucket(String policy, String identifier) {
+        return "rate:tb:" + policy + ":" + identifier;
     }
 
     // ===========================

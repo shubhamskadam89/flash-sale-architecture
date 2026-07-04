@@ -1,10 +1,6 @@
-package com.shubham.flashsale.ratelimit.identity;
+package com.shubham.flashsale.ratelimit.resolver.identity;
 
-import com.shubham.flashsale.auth.dto.UserDetailsImpl;
-import com.shubham.flashsale.common.entity.BaseEntity;
-import com.shubham.flashsale.user.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;

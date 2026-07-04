@@ -1,4 +1,4 @@
-package com.shubham.flashsale.ratelimit;
+package com.shubham.flashsale.ratelimit.config;
 
 public enum RateLimitAlgorithm {
     FIXED_WINDOW,

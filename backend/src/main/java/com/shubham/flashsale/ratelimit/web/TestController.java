@@ -1,6 +1,9 @@
-package com.shubham.flashsale.ratelimit;
+package com.shubham.flashsale.ratelimit.web;
 
-import com.shubham.flashsale.ratelimit.algorithm.SlidingWindowStrategy;
+import com.shubham.flashsale.ratelimit.strategy.SlidingWindowStrategy;
+import com.shubham.flashsale.ratelimit.dto.RateLimitResult;
+import com.shubham.flashsale.ratelimit.service.RateLimiterService;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisCallback;
@@ -25,12 +28,12 @@ public class TestController {
     public RateLimitResult test(HttpServletRequest request) {
 
         return rateLimiterService
-                .checkLimit(request);
+                .checkLimit(request, RateLimitPolicy.GENERAL);
     }
 
     @GetMapping("/public/limit")
     public RateLimitResult test2(HttpServletRequest request){
-        return rateLimiterService.checkLimit(request);
+        return rateLimiterService.checkLimit(request, RateLimitPolicy.GENERAL);
     }
 
 

@@ -1,6 +1,8 @@
 package com.shubham.flashsale.auth.controller;
 
 import com.shubham.flashsale.auth.service.AuthService;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
+import com.shubham.flashsale.ratelimit.annotation.RateLimit;
 import com.shubham.flashsale.user.dto.RegistrartionDto;
 import com.shubham.flashsale.user.dto.UserResponseDto;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +22,7 @@ public class SetupAuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
+    @RateLimit(policy = RateLimitPolicy.AUTH)
     public ResponseEntity<UserResponseDto> registerSetupUser(
             @RequestBody RegistrartionDto registrationDto) {
 

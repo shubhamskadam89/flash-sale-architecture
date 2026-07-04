@@ -12,7 +12,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
-    show-sql: true
+    show-sql: false
     hibernate:
       ddl-auto: validate
     properties:
@@ -35,11 +35,28 @@ spring:
           max-wait: 1000ms
 
 ratelimit:
-  algorithm: TOKEN_BUCKET
-  max-requests: 5
-  window-seconds: 60
-  burst-capacity: 5
-  refill-rate: 1
+  policies:
+    AUTH:
+      algorithm: SLIDING_WINDOW
+      requests: 5
+      window: 60
+
+    TRANSACTION:
+      algorithm: TOKEN_BUCKET
+      requests: 10
+      window: 60
+      burst: 20
+
+    GENERAL:
+      algorithm: FIXED_WINDOW
+      requests: 300
+      window: 60
+
+    ADMIN:
+      algorithm: TOKEN_BUCKET
+      requests: 100
+      window: 60
+      burst: 200
 
 jwt:
   secret: ${JWT_SECRET:dGhpcy1pcy1hLXNhbXBsZS1kZXZlbG9wbWVudC1zZWNyZXQta2V5LXdoY2gtaXMtbG9uZy1lbm91Z2g=}
@@ -61,3 +78,4 @@ management:
         http:
           server:
             requests: true
+

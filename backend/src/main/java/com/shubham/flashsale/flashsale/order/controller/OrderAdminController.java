@@ -2,6 +2,8 @@ package com.shubham.flashsale.flashsale.order.controller;
 
 import com.shubham.flashsale.flashsale.order.dto.OrderResponse;
 import com.shubham.flashsale.flashsale.order.service.OrderService;
+import com.shubham.flashsale.ratelimit.resolver.policy.RateLimitPolicy;
+import com.shubham.flashsale.ratelimit.annotation.RateLimit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,11 +19,13 @@ public class OrderAdminController {
     private final OrderService orderService;
 
     @GetMapping
+    @RateLimit(policy = RateLimitPolicy.ADMIN)
     public ResponseEntity<List<OrderResponse>> getAllOrders() {
         return ResponseEntity.ok(orderService.getAllOrders());
     }
 
     @GetMapping("/users/{userUuid}")
+    @RateLimit(policy = RateLimitPolicy.ADMIN)
     public ResponseEntity<List<OrderResponse>> getOrdersByUser(
             @PathVariable UUID userUuid
     ) {
