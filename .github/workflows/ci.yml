@@ -17,24 +17,64 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    services:
+
+      mysql:
+
+        image: mysql:8.0
+
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: flash_sale_db
+
+        ports:
+          - 3306:3306
+
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+      redis:
+
+        image: redis:7
+
+        ports:
+          - 6379:6379
+
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
     defaults:
       run:
         working-directory: backend
 
+    env:
+
+      DB_HOST: localhost
+      DB_PORT: 3306
+      DB_NAME: flash_sale_db
+      DB_USERNAME: root
+      DB_PASSWORD: root
+
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+
+      JWT_SECRET: this-is-a-github-actions-secret-key-for-testing-only
+
     steps:
 
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Java 21
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
           cache: maven
 
-      - name: Verify Maven
-        run: mvn -version
-
-      - name: Build Backend
-        run: mvn clean package -DskipTests
+      - name: Verify Backend
+        run: mvn verify
