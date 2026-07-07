@@ -93,19 +93,19 @@ services:
       - ../.env
 
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-flash_sale_db}
       TZ: Asia/Kolkata
 
     ports:
-      - "${DB_PORT}:${DB_PORT}"
+      - "${DB_PORT:-3306}:3306"
 
     volumes:
       - mysql_data:/var/lib/mysql
       - ./mysql/init:/docker-entrypoint-initdb.d
 
     healthcheck:
-      test: [ "CMD", "mysqladmin", "ping", "-p${MYSQL_ROOT_PASSWORD}" ]
+      test: [ "CMD", "mysqladmin", "ping", "-p${MYSQL_ROOT_PASSWORD:-root}" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -123,7 +123,7 @@ services:
       - /usr/local/etc/redis/redis.conf
 
     ports:
-      - "${REDIS_PORT}:${REDIS_PORT}"
+      - "${REDIS_PORT:-6379}:6379"
 
     volumes:
       - redis_data:/data
