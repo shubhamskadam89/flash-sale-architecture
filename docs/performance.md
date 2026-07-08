@@ -605,3 +605,145 @@ The Fixed Window implementation successfully enforced the configured rate-limiti
 During early benchmark iterations, high request concurrency exposed socket exhaustion within the NGINX reverse proxy caused by excessive TCP connection creation. Introducing an upstream keepalive connection pool eliminated these transient failures by enabling connection reuse between NGINX and the backend service. Following this infrastructure improvement, the benchmark completed with **zero unexpected HTTP 5xx responses**, demonstrating that the remaining observations reflect application behaviour rather than infrastructure limitations.
 
 The measured latency and CPU utilisation indicate that the rate-limiting framework introduces minimal processing overhead while sustaining high request throughput. Since the `/test/limit` endpoint performs no database access or business processing, the recorded measurements primarily represent the execution cost of policy resolution, identity resolution, Redis evaluation, and HTTP response generation within the rate-limiting framework itself.
+
+
+## 5.4 Sliding Window Policy Validation
+
+### Objective
+
+The objective of this validation is to evaluate the behaviour of the Sliding Window algorithm when configured as the active strategy for the `GENERAL` rate limiting policy.
+
+Unlike the Fixed Window algorithm, Sliding Window continuously evaluates requests over a rolling time interval rather than resetting counters at discrete window boundaries. This approach is intended to provide smoother request distribution and reduce burst behaviour that may occur at window boundaries.
+
+This validation compares the runtime characteristics of the Sliding Window implementation against the previously evaluated Fixed Window strategy while maintaining an identical workload, execution environment, and benchmark configuration.
+
+### Configuration
+
+| Property | Value |
+|----------|-------|
+| **Validation Environment** | Docker Compose |
+| **Target Endpoint** | `/test/limit` |
+| **HTTP Method** | `GET` |
+| **Applied Policy** | `GENERAL` |
+| **Configured Algorithm** | `SLIDING_WINDOW` |
+| **Load Generator** | k6 |
+| **Virtual Users** | `50` |
+| **Benchmark Duration** | `30 seconds` |
+
+The benchmark configuration was intentionally kept identical to the Fixed Window validation. The only modified parameter was the configured rate limiting algorithm, allowing any observed behavioural differences to be attributed solely to the selected strategy.
+
+### Expected Behaviour
+
+The validation is considered successful if:
+
+- The `GENERAL` policy resolves correctly.
+- The Sliding Window strategy is selected by the Strategy Factory.
+- Requests within the configured threshold receive HTTP **200 OK**.
+- Requests exceeding the configured threshold receive HTTP **429 Too Many Requests**.
+- No unexpected HTTP **5xx** responses occur.
+- Runtime metrics remain stable throughout execution.
+
+### Evidence Collected
+
+The following evidence was collected immediately after benchmark execution:
+
+- **k6 execution summary**: Saved in raw JSON at `load-tests/k6/results/sliding-window.json` and styled HTML at `load-tests/k6/reports/2026-07-08/sliding-window.html`.
+- **HTTP response distribution**: 100% valid responses (either HTTP 200 or HTTP 429). Zero unexpected errors.
+- **Request latency**: Recorded P50, P95, and average latency values.
+- **Throughput**: Calculated request rate per second.
+- **Prometheus metrics**: Inspected custom rate limiter metric `rate_limit_breaches_total`.
+- **Redis key inspection**: Inspected value and TTL of the Sliding Window Sorted Set (`zset`).
+- **Application logs**: Confirmed `Rate limit breached` warnings were generated.
+
+### Validation Results & Analysis
+
+The Sliding Window benchmark was executed using the same validation environment and workload configuration as the Fixed Window benchmark. The only variable modified was the configured rate limiting algorithm, allowing direct comparison between both implementations.
+
+The benchmark completed successfully without application errors or infrastructure failures.
+
+| Metric | Observed Value |
+|--------|----------------|
+| **Total Request Count** | `283,496` |
+| **Request Throughput** | `9,449 requests / sec` |
+| **Allowed Requests** | `156` *(within configured limit)* |
+| **Blocked Requests (HTTP 429)** | `283,340` |
+| **Unexpected Responses (HTTP 5xx)** | `0` (`0.00%`) |
+| **Average Latency** | `5.24 ms` |
+| **P95 Latency** | `11.40 ms` |
+
+### Redis Key Verification
+
+Unlike the Fixed Window implementation, the Sliding Window algorithm stores request timestamps inside a Redis Sorted Set rather than maintaining a single incrementing counter.
+
+The following observations were verified after benchmark execution:
+
+- **Redis Data Structure:** `Sorted Set (ZSET)`
+- **Stored Entries (ZCARD):** `283,653`
+- **Remaining Key TTL:** `78 seconds`
+
+Each accepted or rejected request inserts its timestamp into the Sorted Set. During every rate limit evaluation, expired entries are removed using `ZREMRANGEBYSCORE`, ensuring that only requests occurring within the configured rolling time window contribute to the current request count.
+
+The observed key cardinality closely matches the total benchmark request volume, confirming that request timestamps were correctly recorded throughout execution.
+
+### Observability Metrics Correlation
+
+Prometheus and Grafana confirmed that the benchmark executed as expected throughout the validation period.
+
+The monitoring dashboards demonstrated:
+
+- sustained API traffic throughout the benchmark duration;
+- stable response latency under concurrent load;
+- rate limit breach metrics increasing consistently with HTTP 429 responses;
+- CPU utilisation remaining well below hardware saturation;
+- no unexpected infrastructure instability or backend failures.
+
+These observations correlate with the HTTP responses reported by k6 and confirm that the application remained operational while enforcing the configured Sliding Window policy.
+
+<table align="center" style="border: none; border-collapse: collapse; width: 100%;">
+  <tr style="border: none;">
+    <td style="border: none; text-align: center; padding: 15px; width: 50%; vertical-align: top;">
+      <strong>Figure 5.7 — k6 Benchmark Execution Summary</strong><br><br>
+      <img src="/Users/shubhamkadam/.gemini/antigravity-ide/brain/d41bd385-9b8f-47bc-85ff-6e02f16e5e63/sliding_window_k6_summary.png" alt="k6 Benchmark Summary" width="100%"><br><br>
+      <p style="font-size: 0.9em; font-style: italic; text-align: left; line-height: 1.4;">Figure 5.7 summarises the benchmark execution generated by k6. During the 30-second validation period, the benchmark maintained 50 concurrent virtual users, processing 283,496 HTTP requests at an average throughput of 9,449 requests per second while completing all validation checks successfully.</p>
+    </td>
+    <td style="border: none; text-align: center; padding: 15px; width: 50%; vertical-align: top;">
+      <strong>Figure 5.8 — API Request Rate</strong><br><br>
+      <img src="/Users/shubhamkadam/.gemini/antigravity-ide/brain/d41bd385-9b8f-47bc-85ff-6e02f16e5e63/sliding_window_request_rate.png" alt="API Request Rate" width="100%"><br><br>
+      <p style="font-size: 0.9em; font-style: italic; text-align: left; line-height: 1.4;">Figure 5.8 illustrates the request rate observed during the benchmark. Following a short warm-up period, the workload remained stable throughout the active execution window before returning to the baseline after the benchmark completed.</p>
+    </td>
+  </tr>
+  <tr style="border: none;">
+    <td style="border: none; text-align: center; padding: 15px; width: 50%; vertical-align: top;">
+      <strong>Figure 5.9 — API Response Latency</strong><br><br>
+      <img src="/Users/shubhamkadam/.gemini/antigravity-ide/brain/d41bd385-9b8f-47bc-85ff-6e02f16e5e63/sliding_window_p95_latency.png" alt="Response Latency" width="100%"><br><br>
+      <p style="font-size: 0.9em; font-style: italic; text-align: left; line-height: 1.4;">Figure 5.9 presents the response latency measured for the <code>/test/limit</code> endpoint. Despite sustained concurrent traffic, response times remained consistently low, indicating that the rate-limiting framework introduced only minimal processing overhead during request evaluation.</p>
+    </td>
+    <td style="border: none; text-align: center; padding: 15px; width: 50%; vertical-align: top;">
+      <strong>Figure 5.10 — Rate Limit Breaches</strong><br><br>
+      <img src="/Users/shubhamkadam/.gemini/antigravity-ide/brain/d41bd385-9b8f-47bc-85ff-6e02f16e5e63/sliding_window_breaches.png" alt="Rate Limit Breaches" width="100%"><br><br>
+      <p style="font-size: 0.9em; font-style: italic; text-align: left; line-height: 1.4;">Figure 5.10 shows the custom Prometheus metric tracking rate limit violations. The metric increased as the configured request threshold was exceeded and returned to baseline after the benchmark concluded, confirming that rate limit enforcement operated as expected throughout the test.</p>
+    </td>
+  </tr>
+</table>
+
+<div align="center" style="margin-top: 25px;">
+
+### Figure 5.11 — CPU Utilisation
+
+<img src="/Users/shubhamkadam/.gemini/antigravity-ide/brain/d41bd385-9b8f-47bc-85ff-6e02f16e5e63/sliding_window_cpu_usage.png" alt="CPU Utilisation" width="450">
+
+<p style="font-size: 0.9em; font-style: italic; max-width: 650px; text-align: left; margin-top: 15px; line-height: 1.4;">Figure 5.11 illustrates CPU utilisation during benchmark execution. Processor usage increased only during the active workload period and peaked at approximately 40%, indicating that the backend remained well below processor saturation while sustaining more than 9,400 requests per second.</p>
+
+</div>
+
+### Engineering Observations
+
+The Sliding Window implementation successfully enforced the configured request limit while eliminating the boundary effects commonly associated with Fixed Window algorithms.
+
+Because every request timestamp is individually recorded within a Redis Sorted Set, the limiter evaluates requests over a continuously moving time interval rather than discrete sixty-second windows. This provides smoother request admission and prevents large bursts immediately after a window reset.
+
+Compared with the Fixed Window benchmark, the Sliding Window implementation processed approximately 18% fewer requests per second while exhibiting slightly higher average and P95 response latency. This behaviour is expected because each request requires multiple Redis Sorted Set operations, including insertion, pruning of expired entries, and cardinality evaluation.
+
+Despite the additional processing overhead, the benchmark completed without any unexpected HTTP 5xx responses, demonstrating that the implementation remained stable under sustained concurrent load.
+
+Overall, the benchmark illustrates the engineering trade-off between fairness and computational cost. Sliding Window provides more accurate rate limiting at the expense of additional Redis operations and modestly higher latency compared with the simpler Fixed Window approach.

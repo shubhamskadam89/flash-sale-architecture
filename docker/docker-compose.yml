@@ -66,6 +66,7 @@ services:
       DB_HOST: mysql
       REDIS_HOST: redis
       TZ: Asia/Kolkata
+      # RATELIMIT_POLICIES_GENERAL_ALGORITHM: SLIDING_WINDOW
 
     depends_on:
       mysql:
