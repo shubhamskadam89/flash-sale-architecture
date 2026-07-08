@@ -1,6 +1,12 @@
 
 # Flash Sale Engine & API Rate Limiting Gateway
-
+[![Backend CI](https://github.com/shubhamskadam89/rate-limiter-redis/actions/workflows/ci.yml/badge.svg)](https://github.com/shubhamskadam89/rate-limiter-redis/actions/workflows/ci.yml)
+[![Docker Backend](https://img.shields.io/docker/v/shubhamkadam/flash-sale-backend?label=backend&logo=docker)](https://hub.docker.com/repository/docker/shubhamskadam89/flash-sale-backend/general)
+[![Docker Frontend](https://img.shields.io/docker/v/shubhamkadam/flash-sale-frontend?label=frontend&logo=docker)](https://hub.docker.com/repository/docker/shubhamskadam89/flash-sale-frontend/general)
+[![Java 21](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3-brightgreen?logo=springboot)](https://spring.io/projects/spring-boot)
+[![Redis](https://img.shields.io/badge/Redis-7-red?logo=redis)](https://redis.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 A production-inspired distributed backend system built to explore the engineering challenges behind high-concurrency flash sale platforms while following software engineering practices commonly used during real-world backend development.
 
 ---
