@@ -66,10 +66,9 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Prepare Environment
-        working-directory: docker
-        run: cp ../.env.example ../.env
-
       - name: Validate Docker Compose Configuration
         working-directory: docker
-        run: docker compose config
+        run: |
+          trap 'rm -f ../.env' EXIT
+          cp ../.env.example ../.env
+          docker compose config
