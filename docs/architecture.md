@@ -474,3 +474,531 @@ Backend --> Redis
 > **Current Scope**
 >
 > The architecture has been validated in a single-backend deployment. Validation of multi-instance behavior behind Nginx is planned as part of the horizontal scaling milestone before the v1.0 release.
+
+
+
+## 7. Flash Sale Architecture
+
+Unlike traditional REST operations, flash sale systems must preserve business correctness while processing a large number of concurrent purchase requests against limited inventory. Multiple users may attempt to purchase the same item simultaneously, clients may retry requests because of network failures, and successful purchases must be persisted without introducing unnecessary latency into the request path.
+
+These requirements make correctness the primary architectural concern. The system must ensure that inventory cannot be oversold, duplicate requests do not create duplicate purchases, purchase limits are enforced consistently, and successful purchases are eventually persisted without forcing every request to wait for database transactions.
+
+To address these challenges, the Flash Sale Engine decomposes the purchase workflow into independent architectural responsibilities. Each stage solves a specific engineering problem while remaining isolated from the others.
+
+```mermaid
+flowchart LR
+
+Request["Purchase Request"]
+
+Idempotency["Idempotency"]
+
+Inventory["Atomic Inventory Reservation"]
+
+Queue["Async Order Queue"]
+
+Worker["Background Worker"]
+
+Database["MySQL"]
+
+Notification["Real-Time Notification"]
+
+Request --> Idempotency
+Idempotency --> Inventory
+Inventory --> Queue
+Queue --> Worker
+Worker --> Database
+Inventory --> Notification
+```
+
+Rather than relying on a single database transaction to coordinate every stage of the purchase, the architecture distributes responsibility across specialized components. This separation keeps the request path responsive while ensuring that correctness guarantees are established before asynchronous work begins.
+
+> **Why this matters**
+>
+> Breaking the purchase workflow into focused architectural stages allows each concurrency problem to be solved independently. Inventory consistency, duplicate request handling, persistence, and client notifications can evolve without introducing unnecessary coupling or compromising the correctness of the overall purchase flow.
+
+> **Related ADR**
+>
+> ADR-002 — Atomic Purchase Flow *(Planned)*
+
+
+### 7.1 Atomic Inventory Management
+
+Inventory management is the foundation of the Flash Sale Engine. During periods of high demand, multiple purchase requests may attempt to reserve the same inventory simultaneously. If inventory validation and stock updates are performed as separate operations, concurrent requests can observe stale state, resulting in overselling or inconsistent purchase limits.
+
+To prevent these race conditions, the application performs inventory validation and reservation as a single atomic operation within Redis. A Lua script coordinates inventory availability checks, per-user purchase limits, stock reservation, and purchase accounting without allowing other requests to observe an intermediate state.
+
+The script returns explicit outcomes that allow the application to distinguish between successful purchases, exhausted inventory, purchase limit violations, and inventory initialization errors without requiring additional coordination logic.
+
+```mermaid
+flowchart LR
+
+Request["Purchase Request"]
+
+Lua["Atomic Redis Lua Script"]
+
+Inventory{"Inventory Available?"}
+
+Limit{"Purchase Limit Reached?"}
+
+Reserve["Reserve Inventory"]
+
+Success["Reservation Successful"]
+
+Failure["Reject Request"]
+
+Request --> Lua
+Lua --> Inventory
+Inventory -->|No| Failure
+Inventory -->|Yes| Limit
+Limit -->|Yes| Failure
+Limit -->|No| Reserve
+Reserve --> Success
+```
+
+Unlike database-centric approaches that rely on transactions and row locking, the architecture establishes correctness within Redis before any persistence occurs. The database records the outcome of an already validated purchase rather than acting as the coordination mechanism for concurrent requests.
+
+> **Why this matters**
+>
+> Treating inventory reservation as an atomic coordination problem rather than a database transaction eliminates race conditions during concurrent purchases. By guaranteeing inventory correctness before persistence begins, the architecture prevents overselling while keeping the purchase path lightweight and predictable under load.
+
+> **Related ADR**
+>
+> ADR-002 — Atomic Purchase Flow *(Planned)*
+
+
+### 7.2 Distributed Idempotency
+
+Modern distributed systems cannot assume that every request is processed exactly once. Clients may retry requests because of network interruptions, browser refreshes, proxy timeouts, or uncertainty about whether a previous request completed successfully. Without additional coordination, these retries can result in duplicate purchases despite correct inventory management.
+
+The Flash Sale Engine addresses this by introducing a distributed idempotency layer before inventory reservation begins. Every purchase request carries a unique idempotency key that represents a single logical operation rather than an individual HTTP request. Before processing the purchase, the application checks whether that operation has already been completed or is currently in progress.
+
+If the request is new, processing continues normally. If an identical request is received while the original request is still executing, the duplicate is rejected. Once processing completes successfully, subsequent retries return the previously generated response instead of executing the purchase workflow again.
+
+```mermaid
+flowchart LR
+
+Request["Purchase Request"]
+
+Key["Idempotency Key"]
+
+Lookup{"Key Exists?"}
+
+Execute["Execute Purchase"]
+
+Store["Store Result"]
+
+Replay["Replay Previous Response"]
+
+Reject["Duplicate In-Flight Request"]
+
+Request --> Key
+Key --> Lookup
+
+Lookup -->|No| Execute
+Execute --> Store
+
+Lookup -->|Completed| Replay
+Lookup -->|In Progress| Reject
+```
+
+By treating idempotency as a distributed coordination problem rather than an application-memory concern, duplicate request handling remains consistent regardless of which backend instance processes the retry.
+
+> **Why this matters**
+>
+> Atomic inventory management guarantees that concurrent users cannot oversell inventory, while distributed idempotency guarantees that the same user cannot accidentally execute the same purchase multiple times. Together, these mechanisms establish correctness for both concurrent requests and repeated requests.
+
+> **Related ADR**
+>
+> ADR-003 — Distributed Idempotency *(Planned)*
+
+
+### 7.3 Asynchronous Order Processing
+
+Once a purchase has been validated, inventory has been reserved, and idempotency guarantees have been established, the remaining responsibility is to persist the completed purchase as a durable business record. Although this could be performed synchronously within the request lifecycle, doing so would unnecessarily extend request latency by coupling every successful purchase to database performance.
+
+Instead, the Flash Sale Engine separates business correctness from persistence. After the purchase has been successfully coordinated within Redis, the application publishes an order event to a Redis-backed asynchronous queue and immediately returns a successful response to the client. A dedicated background worker consumes queued events and persists completed orders to MySQL independently of the original HTTP request.
+
+```mermaid
+sequenceDiagram
+
+participant Client
+participant Backend
+participant Redis
+participant Queue
+participant Worker
+participant MySQL
+
+Client->>Backend: Purchase Request
+
+Backend->>Redis: Atomic Purchase
+
+Redis-->>Backend: Success
+
+Backend->>Queue: Publish Order Event
+
+Backend-->>Client: Purchase Successful
+
+Worker->>Queue: Consume Event
+
+Worker->>MySQL: Persist Order
+
+MySQL-->>Worker: Persistence Complete
+```
+
+Separating persistence from request processing allows the application to acknowledge successful purchases immediately after business correctness has been established, while database operations continue independently in the background.
+
+This design intentionally accepts **eventual persistence** rather than immediate database durability. Because inventory reservation has already completed successfully before the event is published, database performance no longer determines how quickly clients receive responses during periods of high demand.
+
+> **Why this matters**
+>
+> Decoupling persistence from request processing keeps the critical purchase path focused on correctness rather than storage latency. This allows the system to remain responsive under heavy load while ensuring completed purchases are eventually recorded as durable business data.
+
+> **Current Scope**
+>
+> The current implementation processes orders through a single background worker backed by a Redis queue. Retry behavior, dead-letter handling, and stronger delivery guarantees are intentionally deferred to future iterations as the architecture evolves.
+
+> **Related ADR**
+>
+> ADR-004 — Asynchronous Order Processing *(Planned)*
+
+### 7.4 Real-Time Inventory Notifications
+
+Inventory correctness is only part of the flash sale experience. Once inventory changes, connected clients must observe those changes quickly enough to make informed purchasing decisions. Delayed or inconsistent inventory information can lead to poor user experience, unnecessary purchase attempts, and additional load caused by repeated refresh requests.
+
+Rather than requiring clients to continuously poll the server for inventory changes, the Flash Sale Engine publishes inventory events immediately after a successful reservation. Connected clients receive these updates through Server-Sent Events (SSE), allowing inventory changes to propagate as soon as the purchase workflow completes.
+
+```mermaid
+sequenceDiagram
+
+participant Buyer
+participant Backend
+participant Redis
+participant SSE
+participant Clients
+
+Buyer->>Backend: Successful Purchase
+
+Backend->>Redis: Reserve Inventory
+
+Backend->>SSE: Publish Inventory Update
+
+SSE-->>Clients: Updated Stock Count
+```
+
+Because inventory notifications occur after the inventory reservation has completed successfully, every published update reflects the current coordinated inventory state rather than speculative or intermediate values.
+
+> **Why this matters**
+>
+> Separating inventory coordination from client notification allows the system to maintain business correctness while providing immediate feedback to connected users. Clients receive accurate inventory updates without introducing polling overhead or coupling user experience to the persistence layer.
+
+> **Related ADR**
+>
+> ADR-005 — Real-Time Inventory Streaming *(Planned)*
+
+## 8. Distributed State Management
+
+One of the defining architectural characteristics of the platform is the deliberate separation between **application logic** and **application state**. Rather than allowing backend instances to maintain request coordination in local memory, all concurrency-sensitive state is externalized into shared infrastructure. This allows the application layer to remain stateless while ensuring that every request is evaluated against a consistent view of the system.
+
+Not all application data has the same lifecycle or consistency requirements. Some information exists only to coordinate concurrent requests, while other information represents durable business records that must be retained permanently. The architecture intentionally stores these categories of data in different systems, allowing each technology to focus on the responsibilities it is best suited to perform.
+
+| State Category | Technology | Purpose |
+|---------------|------------|---------|
+| Authentication | JWT | Stateless client identity |
+| Rate Limiting | Redis | Request coordination and traffic control |
+| Inventory | Redis | Atomic stock management |
+| Idempotency | Redis | Duplicate request prevention |
+| Asynchronous Queue | Redis | Temporary event coordination |
+| Business Records | MySQL | Durable system of record |
+
+Redis acts as the platform's coordination layer rather than its permanent datastore. Information stored within Redis exists only for as long as it is required to coordinate concurrent operations. Once those operations complete, durable business information is persisted to MySQL, which remains the authoritative system of record.
+
+```mermaid
+flowchart LR
+
+Client["Client"]
+
+Backend["Spring Boot API"]
+
+Redis["Redis\nCoordination State"]
+
+MySQL["MySQL\nBusiness Records"]
+
+Client --> Backend
+
+Backend --> Redis
+
+Backend --> MySQL
+```
+
+This separation allows different architectural concerns to evolve independently. Request coordination can prioritize speed, atomicity, and low latency, while business persistence focuses on durability, consistency, and long-term storage.
+
+> **Why this matters**
+>
+> Separating transient coordination state from durable business data is one of the core architectural decisions in the system. By externalizing concurrency-sensitive state, the application remains stateless, simplifies future horizontal scaling, and avoids coupling business correctness to database transaction throughput.
+
+> **Related ADR**
+>
+> ADR-008 — Distributed State Management *(Planned)*
+
+## 9. Communication Patterns
+
+The platform uses multiple communication patterns rather than relying on a single interaction model. Different architectural responsibilities have different consistency, latency, and coupling requirements. While synchronous communication is appropriate for client-facing operations, background processing and real-time notifications benefit from asynchronous messaging and event-driven communication.
+
+Each communication mechanism is selected based on the problem it solves rather than adopting a single approach throughout the application.
+
+| Communication Pattern | Purpose |
+|-----------------------|---------|
+| HTTP | Client request/response interactions |
+| Redis Lua Scripts | Atomic coordination for concurrency-sensitive operations |
+| Redis Queue | Asynchronous order persistence |
+| Redis Pub/Sub | Internal event distribution |
+| Server-Sent Events (SSE) | Real-time inventory updates to connected clients |
+
+Together, these communication patterns separate immediate user interactions from background processing while allowing each subsystem to operate with the consistency guarantees it requires.
+
+> **Why this matters**
+>
+> Using multiple communication patterns allows each architectural concern to adopt the interaction model best suited to its requirements. Client responsiveness, business correctness, asynchronous processing, and real-time updates can evolve independently without forcing every subsystem into the same communication model.
+
+
+### 9.1 Synchronous Request Processing
+
+Client-facing operations use a traditional synchronous request-response model over HTTP. Authentication, request validation, rate limiting, idempotency checks, and inventory reservation all execute within the lifecycle of a single request, allowing clients to receive an immediate and deterministic outcome.
+
+Only operations that establish business correctness remain in the synchronous path. Once these guarantees have been established, longer-running work is delegated to asynchronous processing.
+
+```mermaid
+sequenceDiagram
+
+participant Client
+participant Backend
+
+Client->>Backend: HTTP Request
+
+Backend-->>Client: HTTP Response
+```
+
+> **Why this matters**
+>
+> Restricting the synchronous request path to correctness-critical operations minimizes response latency while ensuring clients receive immediate confirmation of the outcome of their requests.
+
+
+### 9.2 Atomic Coordination
+
+Operations that modify shared state execute atomically within Redis through Lua scripts. Rather than issuing multiple independent Redis commands, the application performs validation and state updates as a single execution unit.
+
+This communication pattern is used wherever correctness depends on multiple related operations completing without interference from concurrent requests.
+
+```mermaid
+flowchart LR
+
+Backend --> Lua["Redis Lua Script"]
+
+Lua --> Redis
+```
+
+> **Why this matters**
+>
+> Executing coordination logic atomically removes race conditions without requiring distributed locks or database transactions for every concurrent request.
+
+### 9.3 Asynchronous Messaging
+
+Not every operation requires an immediate response to the client. After business correctness has been established, completed purchase events are published to a Redis-backed queue where they are processed independently by a background worker.
+
+This decouples request processing from database persistence and allows the application to remain responsive even when persistence becomes comparatively slower.
+
+```mermaid
+sequenceDiagram
+
+participant Backend
+
+participant Queue
+
+participant Worker
+
+Backend->>Queue: Publish Event
+
+Worker->>Queue: Consume Event
+```
+
+> **Why this matters**
+>
+> Asynchronous messaging isolates client-facing latency from persistence latency, allowing each subsystem to operate independently while preserving eventual consistency.
+
+
+### 9.4 Event Streaming
+
+Inventory updates are distributed using an event-driven model. Once inventory changes, the backend publishes an update that is streamed to all connected clients through Server-Sent Events.
+
+Unlike request-response communication, this pattern allows the server to initiate communication only when meaningful state changes occur.
+
+```mermaid
+sequenceDiagram
+
+participant Backend
+
+participant SSE
+
+participant Clients
+
+Backend->>SSE: Publish Inventory Event
+
+SSE-->>Clients: Updated Inventory
+```
+
+> **Why this matters**
+>
+> Event-driven communication keeps connected clients synchronized without requiring continuous polling, reducing unnecessary network traffic while improving the responsiveness of the user interface.
+
+## 10. Deployment Topology
+
+The platform is deployed as a collection of independent infrastructure components that collaborate to provide request processing, distributed coordination, persistence, monitoring, and client access. Although developed for local environments using Docker Compose, the deployment intentionally mirrors the separation of responsibilities expected in production systems.
+
+Each service performs a single operational responsibility. The backend remains stateless, Redis coordinates distributed state, MySQL stores durable business records, Nginx provides a unified entry point, and the monitoring stack observes system behavior without participating in request processing.
+
+```mermaid
+flowchart LR
+
+Client["React Frontend"]
+
+Nginx["Nginx"]
+
+Backend["Spring Boot API"]
+
+Redis["Redis"]
+
+MySQL["MySQL"]
+
+Prometheus["Prometheus"]
+
+Grafana["Grafana"]
+
+Client --> Nginx
+
+Nginx --> Backend
+
+Backend --> Redis
+
+Backend --> MySQL
+
+Prometheus --> Backend
+
+Grafana --> Prometheus
+```
+
+### Deployment Responsibilities
+
+| Component | Responsibility |
+|-----------|----------------|
+| **React Frontend** | User interface for authentication, administration, purchasing, and monitoring inventory. |
+| **Nginx** | Reverse proxy providing a single entry point for client traffic. |
+| **Spring Boot API** | Stateless application responsible for request processing and business logic. |
+| **Redis** | Shared coordination layer for rate limiting, inventory, idempotency, queues, and messaging. |
+| **MySQL** | Durable persistence layer for business entities and completed purchases. |
+| **Prometheus** | Collects metrics from application and infrastructure components. |
+| **Grafana** | Visualizes operational metrics through dashboards. |
+
+The deployment intentionally separates application logic from infrastructure concerns. Components communicate through clearly defined interfaces, allowing individual services to be replaced, upgraded, or scaled independently as the architecture evolves.
+
+> **Why this matters**
+>
+> Separating operational responsibilities simplifies deployment, improves maintainability, and establishes clear boundaries between application logic, distributed coordination, persistence, and observability. This organization also prepares the architecture for future production-oriented improvements without requiring significant changes to the application itself.
+
+## 11. Scalability Characteristics
+
+Scalability is not determined by a single technology or deployment decision. It emerges from architectural choices that reduce coupling, externalize shared state, and isolate responsibilities. Throughout the platform, components have been designed so that future growth can be achieved through architectural evolution rather than fundamental redesign.
+
+Several design decisions contribute to the system's scalability characteristics:
+
+| Architectural Decision | Scalability Benefit |
+|-------------------------|---------------------|
+| Stateless application layer | Removes request affinity and simplifies horizontal scaling |
+| JWT authentication | Eliminates server-side session replication |
+| Redis-backed coordination | Externalizes concurrency-sensitive state from application memory |
+| Runtime-configurable rate limiting | Allows endpoint protection policies to evolve independently |
+| Asynchronous order processing | Prevents database latency from affecting request throughput |
+| Independent infrastructure services | Allows monitoring, persistence, and coordination to evolve separately |
+
+These decisions establish a foundation for scaling the application without introducing unnecessary coupling between business logic and infrastructure.
+
+### Current Scope
+
+The current implementation has been validated using a single backend instance with shared infrastructure services. Architectural decisions such as stateless request processing, externalized coordination state, and distributed rate limiting have been implemented with future horizontal scaling in mind, but multi-instance deployment has not yet been validated as part of the current version.
+
+### Planned Validation
+
+Future work will focus on validating the architecture under a multi-instance deployment behind Nginx. This includes verifying consistent behavior for authentication, distributed rate limiting, idempotency, purchase coordination, asynchronous processing, and real-time inventory updates while benchmarking throughput, latency, and resource utilization.
+
+> **Why this matters**
+>
+> Scalability is treated as an architectural characteristic rather than a deployment feature. By separating application logic from shared coordination state and maintaining a stateless request-processing model, the platform establishes a foundation that can be incrementally validated and expanded without requiring significant architectural changes.
+
+> **Related ADR**
+>
+> ADR-007 — Horizontal Scaling *(Planned)*
+
+
+## 12. Architectural Trade-offs
+
+Every architectural decision represents a balance between competing goals. Throughout the project, design choices were driven by the need to preserve correctness under concurrent load while keeping the system modular, observable, and maintainable. Rather than optimizing every aspect of the platform simultaneously, the architecture intentionally prioritizes clear responsibilities and incremental evolution.
+
+The following table summarizes the major architectural decisions, the benefits they provide, and the trade-offs they introduce.
+
+| Architectural Decision | Benefit | Trade-off |
+|-------------------------|---------|-----------|
+| Stateless application layer | Simplifies future horizontal scaling and removes server-side session affinity | Shared coordination state must be externalized |
+| JWT-based authentication | Eliminates server-side session management | Token lifecycle and revocation become application concerns |
+| Redis for coordination state | Provides fast, atomic coordination for concurrency-sensitive operations | Requires an additional infrastructure dependency |
+| Redis Lua for inventory coordination | Guarantees atomic execution without distributed locks | Business coordination logic moves into Lua scripts |
+| Distributed idempotency | Prevents duplicate request execution across retries | Requires lifecycle management of idempotency records |
+| Asynchronous order persistence | Reduces request latency by removing database writes from the critical path | Persistence becomes eventually consistent |
+| Server-Sent Events | Delivers efficient real-time inventory updates | Supports one-way server-to-client communication only |
+| Policy-driven API protection | Allows endpoint behavior to evolve through configuration | Introduces additional abstraction within request processing |
+
+None of these decisions are universally optimal. Each was selected because it best addressed the requirements and constraints of this project while remaining consistent with the architectural principles established at the beginning of this document.
+
+Several operational capabilities—including horizontal scaling validation, stronger asynchronous delivery guarantees, advanced observability, and production deployment patterns—are intentionally deferred to future milestones. This allows the current architecture to remain focused on correctness, modularity, and evidence-driven engineering while providing a clear path for future evolution.
+
+> **Why this matters**
+>
+> Architecture is defined as much by the trade-offs it accepts as by the technologies it adopts. Documenting these decisions provides the context needed to understand why the system was designed this way, what limitations are accepted today, and how future improvements can be introduced without fundamentally changing the architecture.
+
+---
+
+## 13. Related Architecture Decision Records
+
+This document presents the architecture of the system at a high level. Individual engineering decisions, implementation details, trade-offs, validation results, and future refinements are documented separately through Architecture Decision Records (ADRs).
+
+The following ADRs are planned to accompany the v1.0 architecture:
+
+| ADR | Topic | Status |
+|------|-------|--------|
+| ADR-001 | Runtime-Configurable API Protection | Planned |
+| ADR-002 | Atomic Purchase Flow | Planned |
+| ADR-003 | Distributed Idempotency | Planned |
+| ADR-004 | Asynchronous Order Processing | Planned |
+| ADR-005 | Real-Time Inventory Streaming | Planned |
+| ADR-006 | Authentication & Authorization | Planned |
+| ADR-007 | Horizontal Scaling Validation | Planned |
+| ADR-008 | Distributed State Management | Planned |
+
+Each ADR focuses on a single architectural decision and documents:
+
+- The engineering problem being addressed.
+- The architectural decision that was made.
+- Alternative approaches that were considered.
+- Trade-offs introduced by the decision.
+- Validation evidence, benchmarks, or operational observations where applicable.
+
+Together, the architecture document and the ADRs provide complementary views of the system. This document explains **how the platform is structured**, while the ADRs explain **why individual architectural decisions were made**.
+
+---
+
+## 14. Conclusion
+
+The Flash Sale Engine demonstrates how a collection of focused architectural decisions can be combined to solve high-concurrency problems while preserving correctness, maintainability, and operational visibility.
+
+Rather than relying on a single technology or optimization, the architecture separates concerns across authentication, API protection, distributed coordination, asynchronous processing, and observability. Each subsystem exists to solve a specific engineering problem while remaining independently understandable and evolvable.
+
+As the project continues, future milestones will validate horizontal scalability, strengthen operational guarantees, and document additional architectural decisions through dedicated ADRs, allowing the system to evolve while preserving the principles established in this document.
+
