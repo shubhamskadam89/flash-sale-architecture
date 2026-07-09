@@ -1169,7 +1169,7 @@ At **5,000 concurrent VUs** (Run 4), the system reached its absolute saturation 
 
 ### Figure 6.5 — CPU Utilization during the 5,000 VU Saturation Test
 
-<img src="https://github.com/user-attachments/assets/placeholder_grafana_cpu_saturation" alt="CPU Saturation Graph" width="600">
+<img src="https://github.com/user-attachments/assets/1d190796-3545-432c-904c-c9cb07cb6013" alt="CPU Saturation Graph" width="600">
 
 <p style="font-size: 0.9em; font-style: italic; max-width: 650px; text-align: left; margin-top: 15px; line-height: 1.4;">Figure 6.5: CPU utilization increased rapidly as concurrency reached 5,000 virtual users, peaking at approximately 689% of the available 700% Docker CPU allocation. After CPU resources were exhausted, request latency increased sharply, Tomcat request queues filled, and NGINX began returning 502 responses. This demonstrates that the limiting factor during the saturation experiment was host compute capacity rather than application correctness.</p>
 
