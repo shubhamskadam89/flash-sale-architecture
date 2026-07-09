@@ -887,3 +887,70 @@ Compared with the Fixed Window and Sliding Window benchmarks, the Token Bucket i
 Despite the additional processing overhead, the benchmark completed without any unexpected HTTP 5xx responses, demonstrating that the implementation remained stable under sustained concurrent load.
 
 Overall, the benchmark illustrates the engineering trade-off of the Token Bucket approach: it provides the most sophisticated burst handling and smooth rate regulation among the three algorithms, but carries a modest increase in computational latency and Redis write operations compared to the constant-time counter approach of Fixed Window.
+
+
+## 5.6 Comparative Analysis
+
+To evaluate the engineering trade-offs of each rate limiting strategy, this section compares the Fixed Window, Sliding Window, and Token Bucket implementations under identical test workloads (50 Virtual Users for 30 seconds targeting `/test/limit`).
+
+### Performance Matrix
+
+| Metric | Fixed Window | Sliding Window | Token Bucket |
+|--------|--------------|----------------|--------------|
+| **Throughput** | `11,533 requests / sec` | `9,449 requests / sec` | `8,261 requests / sec` |
+| **Average Latency** | `4.27 ms` | `5.24 ms` | `5.92 ms` |
+| **P95 Latency** | `9.35 ms` | `11.40 ms` | `13.04 ms` |
+| **Redis Data Structure** | `String (Counter)` | `Sorted Set (ZSET)` | `Hash (HASH)` |
+| **Redis Operations** | `INCR` / `EXPIRE` | `ZADD`, `ZREMRANGEBYSCORE`, `ZCARD` | `HMGET`, `HMSET` |
+| **Burst Handling** | Poor (Vulnerable to boundary bursts) | Good (Smooth rolling limits) | Excellent (Pool burst + steady refill) |
+| **Fairness** | Low | High | High |
+| **Computational Cost** | Lowest | Moderate | Highest |
+
+---
+
+### Engineering Observations & Analysis
+
+The performance differences observed across the validation runs are not arbitrary; they reflect the core differences in time complexity, data structures, and computational steps required by each algorithm on the Redis server.
+
+#### 1. Fixed Window: Minimalist $O(1)$ Optimization
+
+Fixed Window represents the highest-performing rate limiting strategy, achieving **11,533 requests/sec** with the lowest P95 latency of **9.35 ms**. 
+
+This performance is a direct consequence of its O(1) operational complexity:
+* **Storage simplicity:** It stores state as a simple Redis String containing a single incrementing counter.
+* **Low-overhead operations:** On each incoming request, the application fires a single `INCR` operation. When the key is first created, it sets a window TTL via `EXPIRE`. Because the counter increment is a native Redis operation executed in constant time, CPU overhead in Redis remains negligible.
+* **The Trade-off:** While computationally optimal, Fixed Window is architecturally unfair. It resetting counters at discrete boundaries (e.g., every 60 seconds) allows a client to double their configured quota by bursting at the edge of a reset window (e.g., 300 requests at second 59, and another 300 requests at second 61).
+
+#### 2. Sliding Window: Rolling Boundaries via Sorted Sets
+
+Sliding Window provides a fairer rate-limiting model at the expense of an **18% drop in throughput** (down to **9,449 requests/sec**) and an increase in P95 latency to **11.40 ms**.
+
+This performance penalty is caused by the complexity of Sorted Sets (`zset`):
+* **Storage complexity:** Instead of an incrementing counter, every request (including blocked ones) is recorded as a separate member in a Sorted Set, where both the member value and score represent the timestamp.
+* **Algorithmic overhead:** Evaluating a request requires executing a Lua script that runs three distinct sorted set operations:
+  1. `ZREMRANGEBYSCORE` to prune all timestamps older than the rolling window (e.g., 60 seconds ago). This operation carries a time complexity of $O(\log(N) + M)$, where $N$ is the size of the set and $M$ is the number of elements removed.
+  2. `ZADD` to record the current timestamp ($O(\log(N))$ complexity).
+  3. `ZCARD` to evaluate the active cardinality of the set ($O(1)$ complexity) against the limit threshold.
+* **The Trade-off:** By recording individual request timestamps, the sliding window prevents border burst attacks. However, under high concurrency, set cardinality grows rapidly (reaching **283,653** stored entries during active validation), forcing the Redis CPU to spend significant cycles rebuilding and balancing the underlying skip-list structures.
+
+#### 3. Token Bucket: Sophisticated State Arithmetic
+
+Token Bucket represents the most computationally demanding strategy, resulting in a **28% drop in throughput** compared to Fixed Window (down to **8,261 requests/sec**) and a P95 latency of **13.04 ms**.
+
+This overhead stems from the use of Hash maps and real-time state calculations:
+* **Storage complexity:** The rate limit state is stored as a Redis Hash containing two fields: `tokens` (floating-point capacity) and `last_refill` (millisecond timestamp).
+* **Computational overhead:** Because token accumulation is a continuous function of elapsed time, the limiter cannot simply increment a count. Instead, each evaluation requires executing a Lua script that performs:
+  1. `HMGET` to load the current tokens and last refill timestamp from Redis.
+  2. Floating-point arithmetic to calculate the elapsed time since the last request, multiply it by the refill rate, replenish the bucket capacity, check token sufficiency, and deduct a token.
+  3. `HMSET` to write the updated floating-point token capacity and new timestamp back to the Redis Hash.
+* **The Trade-off:** Token Bucket is the most versatile strategy, allowing systems to easily accommodate sudden traffic bursts up to the capacity limit while enforcing a smooth, continuous long-term request rate. However, the requirement to perform both reads (`HMGET`) and writes (`HMSET`) on a multi-field Hash data structure, combined with floating-point calculations inside the Lua VM, makes it the most CPU-intensive algorithm tested.
+
+---
+
+### Architectural Recommendations
+
+Selecting the appropriate rate limiting algorithm requires balancing throughput demands against traffic shape requirements:
+
+1. **Use Fixed Window** for low-priority, high-throughput endpoints (e.g., static asset delivery or public read APIs) where performance and low latency are prioritized over absolute boundary protection.
+2. **Use Sliding Window** for critical transactional APIs (e.g., authentication endpoints or product discovery) where strict time-window quotas must be enforced without allowing border-reset burst bypasses.
+3. **Use Token Bucket** for purchase endpoints and write-heavy gateway routes (e.g., `/purchase` or order creation) where clients should be allowed to burst occasionally due to network jitter, but must be regulated to a strict steady-state rate to protect downstream queues and databases.
