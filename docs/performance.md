@@ -1188,3 +1188,222 @@ At **5,000 concurrent VUs** (Run 4), the system reached its absolute saturation 
 3. **Database Write Optimizations:** Implement JDBC batch inserts and database replication (e.g. Master-Slave setup) to handle higher write loads.
 4. **Asynchronous Purchase Flow (HTTP 202):** Instead of making the client wait for the Lua script evaluation and queue push to complete synchronously, return an immediate `202 Accepted` status with a ticket ID, allowing client connections to be released instantly.
 
+---
+
+# 7. Engineering Analysis
+
+## 7.1 Introduction
+
+The previous chapters presented quantitative benchmark results together with experimental validation of the implemented rate limiting algorithms and flash sale processing pipeline. While these measurements demonstrate how the system behaves under varying workloads, understanding why those observations occur requires analysis of the underlying architectural decisions.
+
+This chapter interprets the benchmark results in the context of the system design presented in `architecture.md`. Rather than introducing new measurements, it explains how implementation choices such as Redis-backed state management, Lua scripting, asynchronous persistence, virtual threads, and layered request processing influence the observed performance characteristics.
+
+The objective of this chapter is not to identify the fastest implementation, but to explain the trade-offs that emerge between throughput, latency, correctness, fairness, and scalability.
+
+---
+
+## 7.2 Rate Limiting Algorithm Trade-offs
+
+The benchmark results demonstrate that each implemented rate limiting algorithm exhibits different performance characteristics because each maintains state using a different Redis data structure and execution model.
+
+The Fixed Window algorithm achieved the highest throughput and lowest latency. Each request performs a small number of Redis operations, primarily an atomic counter increment together with expiration management. Since the algorithm maintains only a single counter per client and policy, computational complexity remains minimal throughout execution.
+
+Sliding Window introduces additional processing overhead by recording every request timestamp inside a Redis Sorted Set. Before evaluating the current request, expired timestamps must be removed and the remaining request count recalculated. These additional Sorted Set operations increase Redis workload, resulting in lower throughput and slightly higher latency compared with Fixed Window.
+
+Token Bucket demonstrated the highest computational cost among the evaluated algorithms. Instead of maintaining counters or timestamp collections, the algorithm continuously calculates token replenishment using Lua scripting. Every request requires reading bucket state, performing arithmetic operations, updating token availability, and writing the modified state back to Redis. These additional calculations explain the increased latency and lower throughput observed during benchmarking.
+
+Despite these differences, all three algorithms consistently enforced their configured limits without unexpected failures, demonstrating that implementation complexity primarily influences performance characteristics rather than correctness.
+
+---
+
+## 7.3 Throughput versus Correctness
+
+One of the most significant observations throughout the validation process is that throughput alone does not accurately represent system quality.
+
+A transactional application handling flash sale purchases must satisfy strict business invariants regardless of concurrent request volume. Processing additional requests per second has little value if inventory becomes inconsistent, duplicate orders are created, or persistence fails under load.
+
+The benchmark results therefore prioritise correctness before throughput. Across every validated workload, Redis inventory never became negative, duplicate purchases were prevented through idempotency enforcement, asynchronous persistence successfully drained the processing queue, and MySQL eventually reflected the correct number of confirmed orders.
+
+Even during the highest stress scenario, where client requests experienced significant latency and timeout failures, backend verification confirmed that transactional correctness remained intact. The observed degradation therefore reflected resource exhaustion within the deployment environment rather than violations of business correctness.
+
+This distinction demonstrates an important architectural principle: maintaining consistency under load is often more valuable than maximising raw throughput.
+
+---
+
+## 7.4 Analysis of Throughput Degradation
+
+Increasing concurrent virtual users produced a gradual reduction in observed throughput despite larger workloads.
+
+This behaviour is expected for a single-node deployment executing increasingly expensive request processing pipelines.
+
+Initially, incoming requests are processed immediately using available servlet threads. As concurrency increases, requests spend progressively more time waiting for thread availability, Redis operations, queue processing, and database persistence. The increase in waiting time eventually exceeds the increase in request generation, reducing effective throughput while simultaneously increasing response latency.
+
+The benchmark results therefore reflect queueing behaviour rather than inefficient application logic. Higher concurrency introduces greater contention for shared computational resources, causing response times to increase while the number of completed requests per second eventually plateaus.
+
+---
+
+## 7.5 CPU Saturation and System Bottlenecks
+
+The saturation experiments identified CPU availability as the primary limiting resource within the evaluated deployment.
+
+During the 5,000 virtual user benchmark, Docker CPU utilisation approached 689% of the allocated 700% processing capacity. At this point, response latency increased rapidly, request queues expanded, and NGINX began returning gateway timeout responses as backend processing capacity became exhausted.
+
+Importantly, Redis, MySQL, and the implemented business logic continued operating correctly throughout this period. Verification of Redis state, asynchronous queues, and persisted database records confirmed that transactional consistency was preserved despite client-visible failures.
+
+The observed bottleneck therefore originated from host resource exhaustion rather than limitations within the Redis algorithms or transactional implementation.
+
+---
+
+## 7.6 Redis as the Primary Coordination Layer
+
+Redis remained responsive throughout every benchmark scenario despite acting as the central coordination layer for inventory management, rate limiting, idempotency, and asynchronous queues.
+
+Several architectural decisions contributed to this behaviour.
+
+Atomic Lua scripts prevented race conditions without requiring application-level locking, while Redis' in-memory execution model minimised latency for state transitions. Business-critical operations therefore completed before database persistence occurred, allowing asynchronous workers to process durable storage independently of client response time.
+
+Consequently, Redis acted as a lightweight transactional coordinator rather than a persistence layer, enabling the application to maintain correctness while reducing synchronous database workload.
+
+---
+
+## 7.7 Impact of Asynchronous Persistence
+
+Separating inventory reservation from database persistence significantly reduced the amount of work performed during the synchronous request path.
+
+Purchase requests complete immediately after successful inventory reservation and queue insertion, while Virtual Thread workers persist completed orders independently in the background.
+
+This architecture shortens request processing time, improves responsiveness under contention, and isolates temporary database latency from client-visible request latency.
+
+The benchmark results demonstrate that eventual consistency was consistently achieved after queue drainage, confirming that asynchronous persistence preserved both performance and correctness.
+
+---
+
+## 7.8 Engineering Takeaways
+
+The performance evaluation highlights several key architectural observations.
+
+- Simpler Redis algorithms provide higher throughput but offer fewer behavioural guarantees.
+- More sophisticated algorithms introduce additional computational overhead while improving fairness and burst handling.
+- Correctness remained independent of workload intensity throughout all validated scenarios.
+- Asynchronous persistence reduced synchronous request latency while maintaining eventual consistency.
+- Redis successfully coordinated distributed state without becoming the limiting resource.
+- The scalability limits observed during stress testing originated primarily from the constraints of a single-host deployment rather than deficiencies in the application architecture.
+
+These findings validate the design decisions presented throughout the project and establish a clear foundation for future horizontal scaling efforts.
+
+---
+
+# 8. Limitations and Future Work
+
+## 8.1 Introduction
+
+The validation presented throughout this report demonstrates that the current implementation satisfies its primary design objectives within the evaluated deployment environment. However, like any engineering system, the current implementation represents a specific point within a broader architectural evolution rather than a final design.
+
+The limitations discussed in this chapter should therefore be interpreted as deliberate design boundaries rather than implementation defects. Many represent trade-offs made to maintain implementation clarity, reduce operational complexity, and keep the project reproducible within a single-host development environment.
+
+Identifying these limitations provides context for the benchmark results while establishing a roadmap for future architectural improvements.
+
+---
+
+## 8.2 Single Backend Deployment
+
+All validation presented in this report was performed using a single Spring Boot application instance.
+
+Although the architecture has been designed to support stateless request processing through Redis-backed coordination, horizontal scaling across multiple backend instances has not yet been experimentally validated. Consequently, benchmark observations should be interpreted as characteristics of a single-node deployment rather than a distributed production cluster.
+
+---
+
+## 8.3 Redis Availability
+
+The current implementation relies on a single Redis instance for rate limiting, inventory management, idempotency, and asynchronous queue coordination.
+
+While Redis provides excellent performance within this deployment model, it also represents a single point of failure. High-availability mechanisms such as Redis Sentinel or Redis Cluster have not been incorporated into the current implementation and therefore remain outside the scope of the presented benchmarks.
+
+---
+
+## 8.4 Database Scalability
+
+All persistent data is stored within a single MySQL instance.
+
+The application does not currently employ read replicas, database partitioning, or sharding strategies. Consequently, write throughput remains constrained by the capacity of a single relational database server.
+
+Future iterations may investigate horizontal database scaling, connection pooling optimisation, and batch persistence techniques.
+
+---
+
+## 8.5 Background Order Persistence
+
+The asynchronous persistence layer currently processes queued orders using a single background worker.
+
+Although this architecture proved sufficient throughout the validated workloads, queue processing throughput ultimately remains bounded by a single consumer.
+
+Future work may evaluate multiple persistence workers, partitioned queues, or message broker based architectures to further increase persistence throughput.
+
+---
+
+## 8.6 Benchmark Environment
+
+All experiments were executed on a single Apple Silicon development workstation using Docker Compose.
+
+While this environment provides excellent reproducibility, benchmark results should not be interpreted as production capacity estimates.
+
+Hardware specifications, operating systems, cloud infrastructure, and network topology significantly influence observed performance characteristics.
+
+---
+
+## 8.7 Future Work
+
+Several architectural improvements could further increase scalability, resilience, and operational maturity.
+
+Potential future work includes:
+
+- Horizontal scaling across multiple backend instances behind NGINX.
+- Redis Sentinel or Redis Cluster for high availability.
+- Multiple asynchronous persistence workers.
+- Kafka or RabbitMQ replacing Redis Lists for durable messaging.
+- Kubernetes deployment with Horizontal Pod Autoscaling.
+- Distributed tracing using OpenTelemetry.
+- Batch database persistence to reduce write amplification.
+- Multi-region deployment strategies.
+- Extended endurance testing over prolonged execution periods.
+
+---
+
+## 8.8 Closing Remarks
+
+The current implementation should therefore be viewed as a validated architectural foundation rather than a completed production platform.
+
+The benchmarks presented throughout this report demonstrate that the implemented design satisfies its correctness objectives while identifying clear opportunities for future scalability improvements.
+
+This incremental approach reflects the engineering philosophy adopted throughout the project's development.
+
+---
+
+# 9. Conclusion
+
+This report presented the performance validation of the Flash Sale Engine and API Rate Limiting Gateway through a series of controlled experiments designed to evaluate both system performance and transactional correctness under concurrent workloads.
+
+Three Redis-backed rate limiting algorithms—Fixed Window, Sliding Window, and Token Bucket—were implemented and benchmarked using identical workloads. The results demonstrated the expected trade-offs between computational complexity, throughput, latency, fairness, and burst handling. Simpler algorithms achieved higher throughput, while more sophisticated strategies provided improved request distribution and traffic shaping at the cost of additional processing overhead.
+
+Beyond evaluating the gateway, the complete flash sale processing pipeline was validated under progressively increasing concurrent workloads. Correctness experiments confirmed that atomic Redis Lua scripts successfully prevented overselling, idempotency mechanisms eliminated duplicate purchases, asynchronous persistence maintained eventual consistency, and database verification consistently matched Redis state after queue drainage.
+
+Stress testing extended the evaluation beyond normal operating conditions to identify the scalability limits of the current deployment. As concurrency increased, throughput gradually plateaued while response latency increased significantly. Analysis showed that the observed degradation resulted primarily from CPU saturation and servlet thread contention within the single-host deployment rather than failures in the implemented business logic. Even under resource exhaustion, transactional correctness remained preserved, demonstrating that the architecture prioritizes consistency over raw throughput.
+
+The experiments also validated the architectural decisions documented throughout this project. Redis successfully acted as the primary coordination layer for rate limiting, inventory management, idempotency, and asynchronous order processing without becoming the limiting component during the evaluated workloads. Separating synchronous request processing from asynchronous persistence reduced client-visible latency while ensuring durable database storage through eventual consistency.
+
+Overall, the validation demonstrates that the implemented architecture satisfies its primary engineering objectives within the scope of the evaluated deployment:
+
+- Correctly enforce multiple configurable rate limiting policies.
+- Prevent inventory overselling during high-concurrency flash sale events.
+- Guarantee idempotent purchase processing.
+- Maintain eventual consistency between Redis and MySQL.
+- Continue preserving transactional correctness under resource saturation.
+- Provide a reproducible benchmarking framework for future architectural evolution.
+
+Rather than presenting theoretical architectural claims, this report provides experimental evidence supporting the implemented design. The documented benchmark methodology, validation process, and engineering analysis establish a reproducible baseline against which future enhancements—including horizontal scaling, distributed Redis deployments, message brokers, and Kubernetes-based orchestration—can be objectively evaluated.
+
+The Flash Sale Engine therefore represents not only a functional implementation of a high-concurrency backend system, but also a reproducible engineering study demonstrating how architectural decisions influence correctness, performance, scalability, and operational behaviour under realistic workloads.
+
+
+
+
