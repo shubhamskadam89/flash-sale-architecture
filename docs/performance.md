@@ -1093,15 +1093,15 @@ To focus on the most impactful evidence, the dashboard visualizations are consol
 <table align="center" style="border: none; border-collapse: collapse; width: 100%;">
   <tr style="border: none;">
     <td style="border: none; text-align: center; padding: 15px; width: 50%; vertical-align: top;">
-      <strong>Figure 6.1 — End-to-End Correctness under Heavy Contention (500 VUs / 100 Inventory)</strong><br>
-      <em>Time Window: 2026-07-09 10:05:40 to 10:06:10 (Asia/Kolkata)</em><br><br>
-      <img src="https://github.com/user-attachments/assets/placeholder_grafana_correctness" alt="Grafana Correctness Dashboard" width="100%"><br><br>
+      <strong>Figure 6.1 — End-to-End Correctness under Heavy Contention (500 VUs / 100 Inventory)</strong><br><br>
+      <img src="https://github.com/user-attachments/assets/49d9d420-912f-4713-b963-2bd5d2642500" />
+<br><br>
       <p style="font-size: 0.9em; font-style: italic; text-align: left; line-height: 1.4;">Figure 6.1 verifies the baseline correctness of the purchase pipeline. The charts show purchase success rate peaking and flatlining at exactly 100 items as stock hits zero, with a corresponding temporary spike and complete draining of the order persistence queue, validating that eventual consistency with MySQL is achieved.</p>
     </td>
     <td style="border: none; text-align: center; padding: 15px; width: 50%; vertical-align: top;">
-      <strong>Figure 6.2 — Saturation & System Bottlenecks (5,000 VUs / 10,000 Inventory)</strong><br>
-      <em>Time Window: 2026-07-09 10:21:28 to 10:23:28 (Asia/Kolkata)</em><br><br>
-      <img src="https://github.com/user-attachments/assets/placeholder_grafana_saturation" alt="Grafana Saturation Dashboard" width="100%"><br><br>
+      <strong>Figure 6.2 — Saturation & System Bottlenecks (5,000 VUs / 10,000 Inventory)</strong><br><br>
+      <img src="https://github.com/user-attachments/assets/7270a01c-0658-4526-b9b0-f477da3bcf30" />
+<br><br>
       <p style="font-size: 0.9em; font-style: italic; text-align: left; line-height: 1.4;">Figure 6.2 illustrates the system's performance limits. Rather than failing due to lock contention or database corruption, the system plateaus due to CPU saturation and Tomcat thread exhaustion, causing connection queuing times to rise and triggering NGINX bad gateway or client timeout responses.</p>
     </td>
   </tr>
@@ -1135,20 +1135,15 @@ Four distinct workload configurations were evaluated. All runs used a single-ins
 
 ### Figure 6.3 — k6 Benchmark Checks & Groups (Run 1 — 500 VUs / 100 Inventory)
 
-<img src="https://github.com/user-attachments/assets/d20f2e57-59d8-459f-b6bb-cc8603d8f1df" alt="k6 Correctness Test Checks" width="550">
-
-<p style="font-size: 0.9em; font-style: italic; max-width: 650px; text-align: left; margin-top: 15px; line-height: 1.4;">Figure 6.3 displays the k6 HTML report Checks & Groups view for the baseline correctness run (500 VUs / 100 Inventory). Setup authentication, sale discovery, and all 500 concurrent user logins passed at 100%. Exactly 100 purchases successfully completed with zero check failures, verifying perfect correctness.</p>
-
-</div>
-
-<div align="center" style="margin-top: 25px; margin-bottom: 25px;">
-
-### Figure 6.4 — k6 Benchmark Checks & Groups (Run 3 — 2,500 VUs / 5,000 Inventory)
 
 <img src="https://github.com/user-attachments/assets/f5670b2a-7248-410d-8e6c-21dc82ffb043" alt="k6 Stress Test Checks" width="550">
+<p style="font-size: 0.9em; font-style: italic; max-width: 650px; text-align: left; margin-top: 15px; line-height: 1.4;">Figure 6.3 displays the k6 HTML report Checks & Groups view for the baseline correctness run (500 VUs / 100 Inventory). Setup authentication, sale discovery, and all 500 concurrent user logins passed at 100%. Exactly 100 purchases successfully completed with zero check failures, verifying perfect correctness.</p>
+</div>
+<div align="center" style="margin-top: 25px; margin-bottom: 25px;">
+### Figure 6.4 — k6 Benchmark Checks & Groups (Run 3 — 2,500 VUs / 5,000 Inventory)
+  <img src="https://github.com/user-attachments/assets/d20f2e57-59d8-459f-b6bb-cc8603d8f1df" alt="k6 Correctness Test Checks" width="550">
 
 <p style="font-size: 0.9em; font-style: italic; max-width: 650px; text-align: left; margin-top: 15px; line-height: 1.4;">Figure 6.4 displays the k6 HTML report Checks & Groups view for the heavy contention run (2,500 VUs / 5,000 Inventory). Setup authentication and sale discovery passed at 100%. Under the main load test block, all 2,500 virtual users successfully logged in (with 186 requests failing due to transient connection queuing and rate limiting under peak pressure), and exactly 5,000 purchases resolved with zero check failures, confirming strict end-to-end correctness.</p>
-
 </div>
 
 > [!NOTE]
