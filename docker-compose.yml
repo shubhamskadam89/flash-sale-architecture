@@ -35,7 +35,7 @@ services:
       - flash-sale-network
 
   frontend:
-    image: shubhamkadam/flash-sale-frontend:latest
+    image: shubhamskadam89/flash-sale-frontend:latest
     container_name: flash-sale-frontend
     restart: unless-stopped
     depends_on:
@@ -45,7 +45,7 @@ services:
       - flash-sale-network
 
   backend:
-    image: shubhamkadam/flash-sale-backend:latest
+    image: shubhamskadam89/flash-sale-backend:latest
     container_name: flash-sale-backend
     restart: unless-stopped
     env_file:
