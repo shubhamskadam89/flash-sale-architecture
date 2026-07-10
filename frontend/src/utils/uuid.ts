@@ -1,5 +1,7 @@
+import { v4 as uuid } from "uuid";
+
 export function newUuid(): string {
-  return crypto.randomUUID();
+  return uuid();
 }
 
 export function isUuid(value: string): boolean {
