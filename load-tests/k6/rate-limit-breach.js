@@ -84,9 +84,9 @@ export function setup() {
 
         token,
 
-        saleUuid: sale?.saleUuid ?? "",
+        saleUuid: (sale && sale.saleUuid) || "",
 
-        saleItemUuid: sale?.saleItemUuid ?? ""
+        saleItemUuid: (sale && sale.saleItemUuid) || ""
 
     };
 }
