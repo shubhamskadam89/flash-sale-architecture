@@ -159,6 +159,12 @@ export function handleSummary(data) {
     const avg = (data && data.metrics && data.metrics.http_req_duration && data.metrics.http_req_duration.values && data.metrics.http_req_duration.values.avg) || 0;
     const p95 = (data && data.metrics && data.metrics.http_req_duration && data.metrics.http_req_duration.values && data.metrics.http_req_duration.values["p(95)"]) || 0;
 
+    const httpReqs = (data && data.metrics && data.metrics.http_reqs && data.metrics.http_reqs.values && data.metrics.http_reqs.values.count) || 0;
+    const purchaseSuccess = (data && data.metrics && data.metrics.purchase_success && data.metrics.purchase_success.values && data.metrics.purchase_success.values.count) || 0;
+    const purchaseSoldOut = (data && data.metrics && data.metrics.purchase_sold_out && data.metrics.purchase_sold_out.values && data.metrics.purchase_sold_out.values.count) || 0;
+    const purchaseRateLimited = (data && data.metrics && data.metrics.purchase_rate_limited && data.metrics.purchase_rate_limited.values && data.metrics.purchase_rate_limited.values.count) || 0;
+    const purchaseUnexpected = (data && data.metrics && data.metrics.purchase_unexpected && data.metrics.purchase_unexpected.values && data.metrics.purchase_unexpected.values.count) || 0;
+
     const vus = __ENV.VUS || 500;
     const duration = __ENV.DURATION || "30s";
 
@@ -171,19 +177,19 @@ Virtual Users : ${vus}
 
 Duration      : ${duration}
 
-Requests      : ${data.metrics.http_reqs?.values?.count ?? 0}
+Requests      : ${httpReqs}
 
 Avg Latency   : ${avg.toFixed(2)} ms
 
 P95 Latency   : ${p95.toFixed(2)} ms
 
-Success       : ${data.metrics.purchase_success?.values?.count ?? 0}
+Success       : ${purchaseSuccess}
 
-Sold Out      : ${data.metrics.purchase_sold_out?.values?.count ?? 0}
+Sold Out      : ${purchaseSoldOut}
 
-Rate Limited  : ${data.metrics.purchase_rate_limited?.values?.count ?? 0}
+Rate Limited  : ${purchaseRateLimited}
 
-Unexpected    : ${data.metrics.purchase_unexpected?.values?.count ?? 0}
+Unexpected    : ${purchaseUnexpected}
 
 ============================================================
 `;

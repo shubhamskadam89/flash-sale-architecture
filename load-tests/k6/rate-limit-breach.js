@@ -212,6 +212,10 @@ export function handleSummary(data) {
             .replace("{saleItemUuid}", data.saleItemUuid);
     }
 
+    const allowed = (data && data.metrics && data.metrics.rate_limit_allowed && data.metrics.rate_limit_allowed.values && data.metrics.rate_limit_allowed.values.count) || 0;
+    const blocked = (data && data.metrics && data.metrics.rate_limit_blocked && data.metrics.rate_limit_blocked.values && data.metrics.rate_limit_blocked.values.count) || 0;
+    const unexpected = (data && data.metrics && data.metrics.rate_limit_unexpected && data.metrics.rate_limit_unexpected.values && data.metrics.rate_limit_unexpected.values.count) || 0;
+
     const textSummary = `
 ======================================================
 Benchmark Information
@@ -228,11 +232,11 @@ Git Commit         : ${commit}
 
 Rate Limiter Benchmark
 
-Allowed Requests : ${data.metrics.rate_limit_allowed?.values?.count ?? 0}
+Allowed Requests : ${allowed}
 
-Blocked Requests : ${data.metrics.rate_limit_blocked?.values?.count ?? 0}
+Blocked Requests : ${blocked}
 
-Unexpected       : ${data.metrics.rate_limit_unexpected?.values?.count ?? 0}
+Unexpected       : ${unexpected}
 
 Average Latency  : ${avg.toFixed(2)} ms
 
